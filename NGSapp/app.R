@@ -3,13 +3,7 @@ library(shiny)
 
 source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools/NGS_functions.R")
 
-inputChoicesWTS <- list.dirs("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)",recursive = F,full.names = F)
-inputChoicesWES <- list.dirs("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WES",recursive = F,full.names = F)
-inputChoices <- unique(c(inputChoicesWES,inputChoicesWTS))
-otherDirs <- c("2018","2019","Backup files","QualityControl","Algemene documenten WES diagnostiek")
-inputChoices <- rev(inputChoices[!(inputChoices %in% otherDirs)])
-inputChoices <- rev(inputChoices[order(inputChoices)])
-
+inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
 tumorChoices <- unique(refCohort$metaData$`Tumor type simple`)
 tumorChoices <- c("NULL",tumorChoices[order(tumorChoices)])
@@ -31,7 +25,8 @@ ui <- navbarPage("PMC NGS R tools",
                             column(4,selectInput("typeMergeReport", "Choose a type:",choices = c("WTS","WES")))
                           ),
                           fluidRow(
-                            column(4,actionButton("getMetadata", "Make metadata", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
+                            column(2,actionButton("getMetadata", "Make metadata", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
+                            column(2,actionButton("refreshFolders", "Refresh")),
                             column(4,actionButton("makeReport", "Make reports", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
                             column(4,actionButton("mergeReport", "Merge reports", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4"))
                           ),
@@ -96,6 +91,11 @@ server <- function(input, output, session) {
     })
   })
   
+  observeEvent(input$refreshFolders,ignoreInit = T,{
+    updateSelectInput(session,"seqrunMeta",choices=loadSeqFolders() )
+    updateSelectInput(session,"seqrunMakeReport",choices=loadSeqFolders() )
+    updateSelectInput(session,"seqrunMergeReport",choices=loadSeqFolders() )
+  })
   observeEvent(input$makeReport,ignoreInit = T,{
     type <- input$typeMakeReport
     showModal(modalDialog("Generating reports", footer=NULL))
