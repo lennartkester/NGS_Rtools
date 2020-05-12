@@ -1963,3 +1963,12 @@ makeWESoverviewSlide <- function(folder){
   dev.off()
   
 }
+
+loadSeqFolders <- function(){
+  inputChoicesWTS <- list.dirs("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)",recursive = F,full.names = F)
+  inputChoicesWES <- list.dirs("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WES",recursive = F,full.names = F)
+  inputChoices <- unique(c(inputChoicesWES,inputChoicesWTS))
+  otherDirs <- c("2018","2019","Backup files","QualityControl","Algemene documenten WES diagnostiek")
+  inputChoices <- rev(inputChoices[!(inputChoices %in% otherDirs)])
+  inputChoices <- rev(inputChoices[order(inputChoices)])
+}
