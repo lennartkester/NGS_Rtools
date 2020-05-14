@@ -18,6 +18,7 @@ fileList <- list()
 fileList$bmlijst <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Isolaties/Lijst BM genereren.xlsx"
 fileList$bslijst <- "G://Diagnostisch Lab/Laboratorium/Histologie/BioSource aanmaken/Lijst BS genereren.xlsx"
 fileList$NGSdiagnostiek <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Mol-NGS/NGS_Diagnostiek/NGS-Diagnostiek_v3.0.xlsx"
+fileList$ither <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Isolaties/iTHER/Ither overzicht.xlsx"
 
 makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
   date <- Sys.Date()
@@ -205,19 +206,27 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     BSlijst <- read.xlsx(fileList$bslijst)
     BSlijst <- BSlijst[BSlijst$PMABS %in% multiQCdata$PMABS,c("Tumor.%","PMABS")]
     rownames(BSlijst) <- BSlijst$PMABS
-    multiQCdata <- cbind(multiQCdata,BSlijst[multiQCdata$PMABS,1])
+    multiQCdata <- cbind(multiQCdata,BSlijst[multiQCdata$PMABS,"Tumor.%"])
     colnames(multiQCdata)[ncol(multiQCdata)] <- "tumorPerc"
     multiQCdata$tumorPerc <- as.character(multiQCdata$tumorPerc)
     multiQCdata$uniqueReads <- round(as.numeric(multiQCdata$fastqc_Total.Sequences) * as.numeric(multiQCdata$fastqc_total_deduplicated_percentage) / 100000000,0)
     
-    
-    
-    metaData <- as.data.frame(matrix(nrow=nrow(multiQCdatapaired),ncol=16))
-    colnames(metaData) <- c("Skion ID","HiX Nr","PMABS tumor","PMABM tumor","PMABS normal","PMABM normal","T-nummer","Tumor perc","UniqueReadsTumor(10^6)","UniqueReadsNormal(10^6)","MeanCoverageTumor","MeanCoverageNormal","novelVariants","ContaminationTumor","ContaminationNormal","TumorNormalCheck")
+    itherList <- as.data.frame(read.xlsx(fileList$ither),stringsAsFactors=F)
+    itherList <- itherList[!is.na(itherList$HIX),]
+    itherList$PMABS.tumor[is.na(itherList$PMABS.tumor)] <- "unknown"
+    metaData <- as.data.frame(matrix(nrow=nrow(multiQCdatapaired),ncol=17))
+    colnames(metaData) <- c("Skion ID","HiX Nr","PMABS tumor","PMABM tumor","PMABS normal","PMABM normal","T-nummer","Vraagstelling","Tumor perc","UniqueReadsTumor(10^6)","UniqueReadsNormal(10^6)","MeanCoverageTumor","MeanCoverageNormal","novelVariants","ContaminationTumor","ContaminationNormal","TumorNormalCheck")
     for ( i in 1:nrow(metaData)){
-      metaData[i,c(1,2,3,4,7,8,9,11,13,14,16)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample1[i],c("PMCBS","HIX","PMABS","PMABM","PA-nummer","tumorPerc","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","pair_gatk_varianteval_novel_sites","verifybamid_FREEMIX","pair_tumor-normal_comparison_Ratio.as.expected.")]
-      metaData[i,c(5,6,10,12,15)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample2[i],c("PMABS","PMABM","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX")]
+      metaData[i,c(1,2,3,4,7,9,10,12,14,15,17)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample1[i],c("PMCBS","HIX","PMABS","PMABM","PA-nummer","tumorPerc","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","pair_gatk_varianteval_novel_sites","verifybamid_FREEMIX","pair_tumor-normal_comparison_Ratio.as.expected.")]
+      metaData[i,c(5,6,11,13,16)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample2[i],c("PMABS","PMABM","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX")]
+      if(metaData[i,"PMABS tumor"] %in% itherList$PMABS.tumor){
+        metaData[i,"Vraagstelling"] <- paste("ITHER",itherList$Ither.nummer[itherList$PMABS.tumor == metaData[i,"PMABS tumor"]])
+      }else{
+        metaData[i,"Vraagstelling"] <- "Diagnostiek"
+      }
     }
+    metaData$Vraagstelling[grep("PMRBM",metaData[,"PMABM tumor"])] <- "Research"
+    metaData$Vraagstelling[grep("PMOBM",metaData[,"PMABM tumor"])] <- "Organoid"
     metaData$MeanCoverageTumor <- round(as.numeric(metaData$MeanCoverageTumor),0)
     metaData$MeanCoverageNormal <- round(as.numeric(metaData$MeanCoverageNormal),0)
     write.xlsx(metaData,paste0(rootDir,seqRunDir,"/metaData_LKR.xlsx"))
@@ -384,18 +393,30 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     BSlijst <- read.xlsx(fileList$bslijst)
     BSlijst <- BSlijst[BSlijst$PMABS %in% samples$PMABS,c("Tumor.%","PMABS")]
     rownames(BSlijst) <- BSlijst$PMABS
-    samples <- cbind(samples,BSlijst[samples$PMABS,1])
-    samples$RIN <- round(as.numeric(samples$RIN),1)
+    itherList <- as.data.frame(read.xlsx(fileList$ither),stringsAsFactors=F)
+    itherList <- itherList[!is.na(itherList$HIX),]
+    itherList$PMABS.tumor[is.na(itherList$PMABS.tumor)] <- "unknown"
+    vraagStelling <- rep("Diagnostiek",nrow(samples))
+    for( i in 1:nrow(samples)){
+      if(samples$PMABS[i] %in% itherList$PMABS.tumor){
+        vraagStelling[i] <- paste("ITHER",itherList$Ither.nummer[itherList$PMABS.tumor == samples$PMABS[i]])
+      }
+    }
+    samples <- as.data.frame(cbind(samples[,c("PMCBS","HIX","PMABS","PMABM","Type.BS","PA-nummer")],vraagStelling,samples[,c("RIN")],BSlijst[samples$PMABS,"Tumor.%"]),stringsAsFactors=F)
     
     metaData <- do.call(rbind,metaList)
     samples$yield <- round(metaData[samples$PMABM,"yield"],0)
     samples$uniqueReads <- round(metaData[samples$PMABM,"unique_reads"]/1000000,0)
     samples$input <- metaData[samples$PMABM,"input_ng"]
-    colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","RIN","TumorPercentage","yield(fmol)","uniqueReads(10^6)","input(ng)")
+    colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","Vraagstelling","RIN","TumorPercentage","yield(fmol)","uniqueReads(10^6)","input(ng)")
+    samples$RIN <- round(as.numeric(as.character(samples$RIN)),1)
     otherSamples <- samplesDone[!(samplesDone %in% BMlist$PMABM)]
     otherMatrix <- as.data.frame(matrix(ncol=ncol(samples),nrow=length(otherSamples)))
     colnames(otherMatrix) <- colnames(samples)
     otherMatrix$`Biomaterial ID` <- otherSamples
+    otherMatrix$Vraagstelling[grep("PMRBM",otherMatrix$`Biomaterial ID`)] <- "Research"
+    otherMatrix$Vraagstelling[grep("PMOBM",otherMatrix$`Biomaterial ID`)] <- "Organoid"
+    
     samples <- rbind(samples,otherMatrix)
     
     tryCatch(write.xlsx(samples,paste0(baseDirWTS,seqRunDir,"/metaData_LKR.xlsx"),colNames = T,overwrite=T),error = function(e) print("metadata file already exists") ) 
@@ -1223,16 +1244,20 @@ mergeReports <- function(folder=folder, type=type){
       stop("Specified folder does not exists in WTS (RNA-Seq) folder")
     }
     WTSreports <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "WTSreport.pdf",full.names = T)
+    WTSreportsIther <- WTSreports[grep("ITHER",WTSreports)]
+    WTSreports <- WTSreports[grep("ITHER",WTSreports,invert = T)]
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWTS,folder,"metaData_LKR.xlsx",sep="/")))
     qcdataRun <- qcdataRun[grep("PMRBM|PMOBM",qcdataRun$Biomaterial.ID,invert=T),]
-    samplesBiosource <- qcdataRun$BioSource.ID
-    samples <- qcdataRun$Biomaterial.ID
+    samples <- unique(sapply(list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "WTSreport.pdf",full.names = F),function(x) strsplit(x = x,"_")[[1]][1]))
+    rownames(qcdataRun) <- qcdataRun$Biomaterial.ID
+    samplesBiosource <- qcdataRun[samples,"BioSource.ID"]
     wesOverview <- loadWESOverview(samples = samplesBiosource,type="biosource",folder=NULL)
     wesOverview <- wesOverview[!duplicated(wesOverview$`Biomaterial ID`),]
     for ( i in 1:length(samples)){
       sampleBS <- qcdataRun$BioSource.ID[qcdataRun$Biomaterial.ID == samples[i]]
       sampleHIX <- qcdataRun$HIX.Nr[i]
       sampleHIXdir <- paste0(reportDir,sampleHIX)
+      ither <- qcdataRun$Vraagstelling[i]
       if(!dir.exists(sampleHIXdir)){
         dir.create(sampleHIXdir)
       }
@@ -1282,8 +1307,54 @@ mergeReports <- function(folder=folder, type=type){
         pdftools::pdf_combine(input = c(WTSreports[i],WESreport),output = sub("WTSreport.pdf","NGSreport.pdf",WTSreports[i]))
         pdftools::pdf_combine(input = c(WTSreports[i],WESreport),output = paste0(sampleHIXdir,"/",sampleHIX,"_",sampleBS,"_",samples[i],".pdf"))
       }
+      if(grepl("ITHER",ither)){
+        WESreport <- NULL
+        CNVreport <- NULL
+        if (sampleBS %in% wesOverview$`BioSource ID`){
+          message(paste(samples[i], sampleBS,"has WES data availble"))
+          sampleBM <- wesOverview$`Biomaterial ID`[wesOverview$`BioSource ID` == sampleBS]
+          sampleBM <- sampleBM[length(sampleBM)]
+          WESreport <- paste(baseDirWES,wesOverview$seqRunID[wesOverview$`BioSource ID` == sampleBS],"/",sampleBM,"_",gsub(" ","_",ither),"_WESreport.pdf",sep="")
+          WESreport <- WESreport[length(WESreport)]
+          if (!file.exists(WESreport)){
+            message(paste("WES report for",sampleBS,sampleBM,"does not exist"))
+            WESreport <- NULL
+          }
+          CNVreport <- list.files(path = paste(baseDirWES,wesOverview$seqRunID[wesOverview$`BioSource ID` == sampleBS],"/",sep=""),pattern = "CNVreport.pdf",full.names = T)
+          CNVreport <- CNVreport[grep(sampleBM,CNVreport)]
+          if (identical(CNVreport, character(0))){
+            message(paste("CNV report for",sampleBS,sampleBM,"does not exist"))
+            CNVreport <- NULL
+          }
+        }else{
+          message(paste(samples[i],sampleBS,"does not have WES data availble"))
+        }
+        if(!is.null(CNVreport)){
+          CNVtemp <- sub(".pdf","temp.pdf",CNVreport)
+          if(wesOverview$Vraagstellling[wesOverview$`BioSource ID`==sampleBS] == "Diagnostiek NO"){
+            pdftools::pdf_subset(CNVreport,c(1,2,5),CNVtemp)
+          }else if(wesOverview$Vraagstellling[wesOverview$`BioSource ID`==sampleBS] == "Diagnostiek HO"){
+            pdftools::pdf_subset(CNVreport,c(1,2,4),CNVtemp)
+          }else if(wesOverview$Vraagstellling[wesOverview$`BioSource ID`==sampleBS] == "Diagnostiek ST"){
+            pdftools::pdf_subset(CNVreport,c(1,2,3),CNVtemp)
+          }else{
+            pdftools::pdf_subset(CNVreport,c(1,2,3,4,5),CNVtemp)
+          }
+          if(is.null(WESreport)){
+            pdftools::pdf_combine(input = c(WTSreportsIther[grep(samples[i],WTSreportsIther)],CNVtemp),output = sub("WTSreport.pdf","NGSreport.pdf",WTSreportsIther[grep(samples[i],WTSreportsIther)]))
+          }
+          if(!is.null(WESreport)){
+            pdftools::pdf_combine(input = c(WTSreportsIther[grep(samples[i],WTSreportsIther)],WESreport,CNVtemp),output = sub("WTSreport.pdf","NGSreport.pdf",WTSreportsIther[grep(samples[i],WTSreportsIther)]))
+          }
+          file.remove(CNVtemp)
+          ## print WTSreport and CNV report to pdf ##
+        }else{
+          pdftools::pdf_combine(input = c(WTSreportsIther[grep(samples[i],WTSreportsIther)],WESreport),output = sub("WTSreport.pdf","NGSreport.pdf",WTSreportsIther[grep(samples[i],WTSreportsIther)]))
+        }
+      }
     }
     reportFiles <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
+    reportFiles <- reportFiles[grep("ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWTS,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
     pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWTS,folder,"/",folder,"_runReport.pdf"))
   }
@@ -1292,17 +1363,21 @@ mergeReports <- function(folder=folder, type=type){
       stop("Specified folder does not exists in WES folder")
     }
     WESreports <- list.files(path=paste(baseDirWES,folder,sep=""),pattern = "WESreport.pdf",full.names = T)
+    WESreportsIther <- WESreports[grep("ITHER",WESreports)]
+    WESreports <- WESreports[grep("ITHER",WESreports,invert = T)]
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
-    samplesBiosource <- qcdataRun$PMABS.tumor
-    samples <- qcdataRun$PMABM.tumor
+    samples <- unique(sapply(list.files(path=paste(baseDirWES,folder,sep=""),pattern = "WESreport.pdf",full.names = F),function(x) strsplit(x = x,"_")[[1]][1]))
+    rownames(qcdataRun) <- qcdataRun$PMABM.tumor
+    samplesBiosource <- qcdataRun[samples,"PMABS.tumor"]
     wtsOverview <- loadRNAseqOverview(samples = samplesBiosource,type="biosource",folder=NULL)
     wesOverview <- loadWESOverview(samples = samples,folder = folder)
     wesOverview <- wesOverview[!duplicated(wesOverview$`Biomaterial ID`),]
     for ( i in 1:length(samples)){
-      curWesReport <- WESreports[grep(samples[i],WESreports)]
+      curWesReport <- WESreports[i]
       sampleBS <- samplesBiosource[i]
       sampleHIX <- qcdataRun$HiX.Nr[i]
       sampleHIXdir <- paste0(reportDir,sampleHIX)
+      ither <- qcdataRun$Vraagstelling[i]
       if(!dir.exists(sampleHIXdir)){
         dir.create(sampleHIXdir)
       }
@@ -1347,8 +1422,54 @@ mergeReports <- function(folder=folder, type=type){
         pdftools::pdf_combine(input = c(WTSreport,curWesReport),output = sub("WESreport.pdf","NGSreport.pdf",curWesReport))
         pdftools::pdf_combine(input = c(WTSreport,curWesReport),output = paste0(sampleHIXdir,"/",sampleHIX,"_",sampleBS,"_",samples[i],".pdf"))
       }
+      if(grepl("ITHER",ither)){
+        curWesReport <- sub("WESreport.pdf",paste0(sub(" ","_",ither),"_WESreport.pdf"),curWesReport)
+        WTSreport <- NULL
+        if (sampleBS %in% wtsOverview$`BioSource ID`){
+          message(paste(samples[i], sampleBS,"has RNAseq data availble"))
+          sampleBM <- wtsOverview$`Biomaterial ID`[wtsOverview$`BioSource ID` == sampleBS]
+          sampleBM <- sampleBM[length(sampleBM)]
+          WTSreport <- paste(baseDirWTS,wtsOverview$seqRunID[wtsOverview$`BioSource ID` == sampleBS],"/",sampleBM,"_",sub(" ","_",ither),"_WTSreport.pdf",sep="")
+          WTSreport <- WTSreport[length(WTSreport)]
+          if (!file.exists(WTSreport)){
+            message(paste("WTS report for",sampleBS,sampleBM,"does not exist"))
+            WTSreport <- NULL
+          }
+        }else{
+          message(paste(samples[i],sampleBS,"does not have RNAseq data availble"))
+        }
+        CNVreport <- list.files(paste(baseDirWES,folder,sep=""),pattern = "CNVreport",full.names = T)
+        CNVreport <- CNVreport[grep(samples[i],CNVreport)][1]
+        if(!identical(CNVreport,character(0)) & !is.na(CNVreport)){
+          CNVtemp <- sub(".pdf","temp.pdf",CNVreport)
+          if(wesOverview$Vraagstellling[wesOverview$`BioSource ID`==sampleBS] == "Diagnostiek NO"){
+            pdftools::pdf_subset(CNVreport,c(1,2,5),CNVtemp)
+          }else if(wesOverview$Vraagstellling[wesOverview$`BioSource ID`==sampleBS] == "Diagnostiek HO"){
+            pdftools::pdf_subset(CNVreport,c(1,2,4),CNVtemp)
+          }else if(wesOverview$Vraagstellling[wesOverview$`BioSource ID`==sampleBS] == "Diagnostiek ST"){
+            pdftools::pdf_subset(CNVreport,c(1,2,3),CNVtemp)
+          }else{
+            pdftools::pdf_subset(CNVreport,c(1,2,3,4,5),CNVtemp)
+          }
+          if(is.null(WTSreport)){
+            pdftools::pdf_combine(input = c(curWesReport,CNVtemp),output = sub("WESreport.pdf","NGSreport.pdf",curWesReport))
+            pdftools::pdf_combine(input = c(curWesReport,CNVtemp),output = paste0(sampleHIXdir,"/",sampleHIX,"_",sampleBS,"_",samples[i],".pdf"))
+          }
+          if(!is.null(WTSreport)){
+            pdftools::pdf_combine(input = c(WTSreport,curWesReport,CNVtemp),output = sub("WESreport.pdf","NGSreport.pdf",curWesReport))
+            pdftools::pdf_combine(input = c(WTSreport,curWesReport,CNVtemp),output = paste0(sampleHIXdir,"/",sampleHIX,"_",sampleBS,"_",samples[i],".pdf"))
+          }
+          file.remove(CNVtemp)
+          ## print WTSreport and CNV report to pdf ##
+        }else if(!is.null(WTSreport)){
+          pdftools::pdf_combine(input = c(WTSreport,curWesReport),output = sub("WESreport.pdf","NGSreport.pdf",curWesReport))
+          pdftools::pdf_combine(input = c(WTSreport,curWesReport),output = paste0(sampleHIXdir,"/",sampleHIX,"_",sampleBS,"_",samples[i],".pdf"))
+        }
+        
+      }
     }
     reportFiles <- list.files(path=paste(baseDirWES,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
+    reportFiles <- reportFiles[grep("ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
     pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWES,folder,"/",folder,"_runReport.pdf"))
   }
@@ -1369,13 +1490,16 @@ generateReport <- function(folder=folder, type=type){
     samples <- sapply(samples,function(x) strsplit(x,"_")[[1]][1])
     samples <- unique(samples)
     samples <- gsub("~\\$","",samples)
-    qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWTS,folder,"metaData_LKR.xlsx",sep="/")))
+    qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWTS,folder,"metaData_LKR.xlsx",sep="/")),stringsAsFactors=F)
     mostRecentQC <- list.files(paste(baseDirWTS,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
     mostRecentQC <- mostRecentQC[length(mostRecentQC)]
     qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
     rnaSeqOverview <- loadRNAseqOverview(folder=folder,samples=samples)
     for ( sample in samples ){
       printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview)
+      if(grepl("ITHER",qcdataRun[qcdataRun$Biomaterial.ID == sample,"Vraagstelling"])){
+        printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview,ITHER=T)
+      }
       message(paste("made",sample,"WTS report"))
     }
     makeWTSoverviewSlide(folder)
@@ -1396,6 +1520,9 @@ generateReport <- function(folder=folder, type=type){
     wesOverview <- loadWESOverview(folder=folder,samples=samples)
     for ( sample in samples ){
       printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview)
+      if(grepl("ITHER",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])){
+        printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview,ITHER=T)
+      }  
       message(paste("made",sample,"WES report"))
     }
     makeWESoverviewSlide(folder)
@@ -1509,9 +1636,14 @@ qcBarplotWES <- function(dataRun,dataAll,sample,variable){
 }
 
 
-printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOverview){
+printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOverview,ITHER=F){
   #  png(paste(baseDirWTS,folder,"/",sample,"_WTSreport.png",sep=""), 12, 7, units="in", type="cairo", res=300, bg="white")
-  pdf(paste(baseDirWTS,folder,"/",sample,"_WTSreport.pdf",sep=""), width = 12, height = 7, bg="white")
+  if(ITHER){
+    itherNr <- gsub(" ","_",qcdataRun[qcdataRun$Biomaterial.ID == sample,"Vraagstelling"])
+    pdf(paste(baseDirWTS,folder,"/",sample,"_",itherNr,"_WTSreport.pdf",sep=""), width = 12, height = 7, bg="white")
+  }else{
+    pdf(paste(baseDirWTS,folder,"/",sample,"_WTSreport.pdf",sep=""), width = 12, height = 7, bg="white")
+  }
   layout(mat = matrix(ncol=2,nrow=5,data=c(1,1,2,3,2,4,2,5,6,6),byrow = T),widths = c(1,1),heights = c(0.3,1,1,1,1))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
@@ -1521,39 +1653,48 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   vps <- baseViewports()
   pushViewport(vps$inner, vps$figure, vps$plot)
   
-  tab <- rbind(folder,
-               t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(1:6)]),
-               t(rnaSeqOverview[sample,c(13)]),
-               t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(7:11)]))
-  rownames(tab) <- c("Seq Run ID","SKION ID","HIX ID","Biosource ID","Biomaterial ID","Material type","T-number","Diagnosis","RIN","Tumor Cell %","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
+  if(ITHER){
+    tab <- rbind(folder,
+                 t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(1,3:7)]),
+                 t(rnaSeqOverview[sample,c(13)]),
+                 t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(8:12)]))
+    rownames(tab) <- c("Seq Run ID","SKION ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","RIN","Tumor Cell %","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
+  }else{
+    tab <- rbind(folder,
+                 t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(1:7)]),
+                 t(rnaSeqOverview[sample,c(13)]),
+                 t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(8:12)]))
+    rownames(tab) <- c("Seq Run ID","SKION ID","HIX ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","RIN","Tumor Cell %","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
+    
+  }
   tab <- as.table(tab)
   cols <- matrix("black",nrow=nrow(tab),ncol=ncol(tab))
   rownames(cols) <- rownames(tab)
   if(!is.na(tab["Yield (fmol)",])){
-    if(tab["Yield (fmol)",] < 1000){
+    if(as.numeric(tab["Yield (fmol)",]) < 1000){
       cols["Yield (fmol)",] <- "red"
     }
   }else{
     cols["Yield (fmol)",] <- "red"
   }
   if(!is.na(tab["Unique Reads (10^6)",])){
-    if(tab["Unique Reads (10^6)",] < 40){
+    if(as.numeric(tab["Unique Reads (10^6)",]) < 40){
       cols["Unique Reads (10^6)",] <- "red"
     }
   }else{
     cols["Unique Reads (10^6)",] <- "red"
   }
   if(!is.na(tab["RIN",])){
-    if(tab["RIN",] < 2){
+    if(as.numeric(tab["RIN",]) < 2){
       cols["RIN",] <- "red"
-    }else if(tab["RIN",] < 5){
+    }else if(as.numeric(tab["RIN",]) < 5){
       cols["RIN",] <- "orange"
     }
   }else{
     cols["RIN",] <- "red"
   }
   if(!is.na(tab["Tumor Cell %",])){
-    if(tab["Tumor Cell %",] < 20){
+    if(as.numeric(tab["Tumor Cell %",]) < 20){
       cols["Tumor Cell %",] <- "red"
     }
   }else{
@@ -1578,9 +1719,14 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   dev.off()
 }
 
-printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverview){
+printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverview,ITHER=F){
   #png(paste(baseDirWES,folder,"/",sample,"_WESreport.png",sep=""), 12, 7, units="in", type="cairo", res=300, bg="white")
-  pdf(paste(baseDirWES,folder,"/",sample,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
+  if(ITHER){
+    itherNr <- gsub(" ","_",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])
+    pdf(paste(baseDirWES,folder,"/",sample,"_",itherNr,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
+  }else{
+    pdf(paste(baseDirWES,folder,"/",sample,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
+  }
   layout(mat = matrix(ncol=2,nrow=5,data=c(1,1,2,3,2,4,2,5,6,6),byrow = T),widths = c(1,1),heights = c(0.3,1,1,1,1.5))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
@@ -1589,24 +1735,31 @@ printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverv
   frame()
   vps <- baseViewports()
   pushViewport(vps$inner, vps$figure, vps$plot)
-  
-  tab <- rbind(folder,
-               t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(1:7)]),
-               t(wesOverview[wesOverview$`Biomaterial ID` == sample,c(13)][1]),
-               t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(8,11:16)]))
-  rownames(tab) <- c("Seq Run ID","SKION ID","HIX ID","Biosource ID Tumor","Biomaterial ID Tumor","Biosource ID Normal","Biomaterial ID Normal","T-number","Diagnosis","Tumor Cell %","Mean Coverage Tumor","Mean Coverage Normal","Novel Variants","Contamination Tumor","Contamination Normal","Tumor Normal match")
+  if(ITHER){
+    tab <- rbind(folder,
+                 t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(1,3:8)]),
+                 t(wesOverview[wesOverview$`Biomaterial ID` == sample,c(13)][1]),
+                 t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(9,12:17)]))
+    rownames(tab) <- c("Seq Run ID","SKION ID","Biosource ID Tumor","Biomaterial ID Tumor","Biosource ID Normal","Biomaterial ID Normal","T-number","Vraagstelling","Diagnosis","Tumor Cell %","Mean Coverage Tumor","Mean Coverage Normal","Novel Variants","Contamination Tumor","Contamination Normal","Tumor Normal match")
+  }else{
+    tab <- rbind(folder,
+                 t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(1:8)]),
+                 t(wesOverview[wesOverview$`Biomaterial ID` == sample,c(13)][1]),
+                 t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(9,12:17)]))
+    rownames(tab) <- c("Seq Run ID","SKION ID","HIX ID","Biosource ID Tumor","Biomaterial ID Tumor","Biosource ID Normal","Biomaterial ID Normal","T-number","Vraagstelling","Diagnosis","Tumor Cell %","Mean Coverage Tumor","Mean Coverage Normal","Novel Variants","Contamination Tumor","Contamination Normal","Tumor Normal match")
+  }
   tab <- as.table(tab)
   cols <- matrix("black",nrow=nrow(tab),ncol=ncol(tab))
   rownames(cols) <- rownames(tab)
   if(!is.na(tab["Mean Coverage Tumor",])){
-    if(tab["Mean Coverage Tumor",] < 200){
+    if(as.numeric(tab["Mean Coverage Tumor",]) < 200){
       cols["Mean Coverage Tumor",] <- "red"
     }
   }else{
     cols["Mean Coverage Tumor",] <- "red"
   }
   if(!is.na(tab["Mean Coverage Normal",])){
-    if(tab["Mean Coverage Normal",] < 100){
+    if(as.numeric(tab["Mean Coverage Normal",]) < 100){
       cols["Mean Coverage Normal",] <- "red"
     }
   }else{
@@ -1614,26 +1767,26 @@ printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverv
   }
 
   if(!is.na(tab["Contamination Tumor",])){
-    if(tab["Contamination Tumor",] > 2){
+    if(as.numeric(tab["Contamination Tumor",]) > 2){
       cols["Contamination Tumor",] <- "red"
     }
   }else{
     cols["Contamination Tumor",] <- "red"
   }
   if(!is.na(tab["Contamination Normal",])){
-    if(tab["Contamination Normal",] > 2){
+    if(as.numeric(tab["Contamination Normal",]) > 2){
       cols["Contamination Normal",] <- "red"
     }
   }else{
     cols["Contamination Normal",] <- "red"
   }
-  if(!is.na(tab["Tumor Cell %",])){
-    if(tab["Tumor Cell %",] < 20){
-      cols["Tumor Cell %",] <- "red"
-    }
-  }else{
-    cols["Tumor Cell %",] <- "red"
-  }
+#  if(!is.na(tab["Tumor Cell %",])){
+#    if(as.numeric(tab["Tumor Cell %",]) < 20){
+#      cols["Tumor Cell %",] <- "red"
+#    }
+#  }else{
+#    cols["Tumor Cell %",] <- "red"
+#  }
   mytheme <- gridExtra::ttheme_default(core = list(fg_params=list(cex = 0.8,col = cols)),colhead = list(fg_params=list(cex = 0.8)),rowhead = list(fg_params=list(cex = 0.8)))
   grob <-  tableGrob(tab,cols=NULL,theme = mytheme)  
   grid.draw(grob)
@@ -1856,6 +2009,11 @@ qcBoxplotWTS <- function(dataRun,dataAll,samples,variable){
   dataRun <- dataRun[!is.na(dataRun[,variable]),]
   samples <- samples[samples %in% rownames(dataRun)]
   points(jitter(rep(1,nrow(dataRun)),5),dataRun[samples,variable],pch=20,col='red',cex=2)
+  if (variable == "yield(fmol)"){
+    abline(h=1000,lty=2,col='grey')
+  }else if(variable == "uniqueReads(10^6)"){
+    abline(h=40,lty=2,col='grey')
+  }
 }
 
 qcBoxplotWES <- function(dataRun,dataAll,samples,variable){
@@ -1909,7 +2067,7 @@ makeWTSoverviewSlide <- function(folder){
   rownames(qcdataRun) <- qcdataRun$Biomaterial.ID
   wtsOverview <- loadRNAseqOverview(folder=folder)
   pdf(paste0(baseDirWTS,folder,"/",folder,"_QCoverview.pdf"),width = 12,height = 7)
-  layout(mat = matrix(nrow=2,ncol=4,data=c(1,1,1,1,2,3,4,5),byrow = T),widths = c(2,1,1,1), heights = c(1,5))
+  layout(mat = matrix(nrow=2,ncol=4,data=c(1,1,1,1,2,3,4,5),byrow = T),widths = c(3,1,1,1), heights = c(1,5))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
   text(0.5,0.5,paste("RNA seq QC overview",folder),cex=2)
@@ -1918,7 +2076,9 @@ makeWTSoverviewSlide <- function(folder){
   vps <- baseViewports()
   pushViewport(vps$inner, vps$figure, vps$plot)
   
-  tab <- cbind(wtsOverview[rownames(qcdataRun),c("HIX Nr","Tumor type")])
+  tab <- cbind(qcdataRun[,c("HIX.Nr","Vraagstelling")],wtsOverview[rownames(qcdataRun),c("Tumor type")])
+  colnames(tab)[3] <- "Tumor type"
+  tab[,3] <- sapply(lapply(tab[,3],strwrap, width=40), paste, collapse="\n")
   rownames(tab) <- NULL
   grob <-  tableGrob(tab,rows=NULL)  
   grid.draw(grob)
@@ -1942,7 +2102,7 @@ makeWESoverviewSlide <- function(folder){
   wesOverview <- loadWESOverview(folder=folder)
   wesOverview <- wesOverview[!is.na(wesOverview$`Tumor type`),]
   pdf(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),width = 12,height = 7)
-  layout(mat = matrix(nrow=2,ncol=4,data=c(1,1,1,1,2,3,4,5),byrow = T),widths = c(2,1,1,1), heights = c(1,5))
+  layout(mat = matrix(nrow=2,ncol=4,data=c(1,1,1,1,2,3,4,5),byrow = T),widths = c(3,1,1,1), heights = c(1,5))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
   text(0.5,0.5,paste("WES QC overview",folder),cex=2)
@@ -1951,7 +2111,8 @@ makeWESoverviewSlide <- function(folder){
   vps <- baseViewports()
   pushViewport(vps$inner, vps$figure, vps$plot)
   
-  tab <- cbind(wesOverview[,c("HIX Nr","Tumor type")])
+  tab <- cbind(qcdataRun[,c("HiX.Nr","Vraagstelling")],wesOverview[rownames(qcdataRun),c("Tumor type")])
+  colnames(tab)[3] <- "Tumor type"
   rownames(tab) <- NULL
   grob <-  tableGrob(tab,rows=NULL)  
   grid.draw(grob)
