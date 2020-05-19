@@ -100,36 +100,6 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     ## load data from multiQC files ##
     
     dataList <- list()
-    for ( i in 1:length(singleSamples)){
-      curSampleDir <- list.dirs(paste0(rootDir,"QualityControl/multiQCfiles/",singleSamples[i]),recursive = T)[2]
-      if (is.na(curSampleDir)){
-        next
-      }
-      tempList <- list()
-      for ( j in 1:length(dataTypesSingle2)){
-        tempList[[j]] <- read.csv(paste0(curSampleDir,"/",dataTypesSingle2[j]),sep="\t",stringsAsFactors = F)
-        colnames(tempList[[j]]) <- paste(dataTypesSingle[j],colnames(tempList[[j]]),sep="_")
-      }
-      dataList[[i]] <- as.data.frame(t(unlist(tempList)))
-    }
-    
-    colnamesAll <- unique(unlist(lapply(dataList, function(x) colnames(x))))
-    
-    multiQCdataSingle <- as.data.frame(matrix(nrow=length(dataList),ncol=length(colnamesAll)))
-    colnames(multiQCdataSingle) <- colnamesAll
-    for ( i in 1:length(singleSamples)){
-      if ( !is.null(dataList[[i]])){
-        multiQCdataSingle[i,colnames(dataList[[i]])] <- as.matrix(dataList[[i]])   
-      }
-    }
-    rownames(multiQCdataSingle) <- sapply(singleSamples,function(x) paste(strsplit(x,"_")[[1]][c(1,2)],collapse="_"))
-    multiQCdataSingle[,"Biomaterial ID"] <- sapply(multiQCdataSingle$fastqc_Sample, function(x) strsplit(x,"_")[[1]][1])
-    
-    dups <- multiQCdataSingle$`Biomaterial ID`[duplicated(multiQCdataSingle$`Biomaterial ID`)]
-    multiQCdataSingle <- multiQCdataSingle[!(multiQCdataSingle$`Biomaterial ID` %in% dups),]
-    
-    
-    dataList <- list()
     for ( i in 1:length(pairedSamples)){
       curSampleDir <- list.dirs(paste0(rootDir,"QualityControl/multiQCfiles/",pairedSamples[i]),recursive = T)[2]
       if (is.na(curSampleDir)){
@@ -164,9 +134,45 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     multiQCdatapaired <- multiQCdatapaired[,grep("OxoG",colnames(multiQCdatapaired),invert = T)]
     colnames(multiQCdatapaired) <- paste("pair_",colnames(multiQCdatapaired),sep="")
     
+    singleSamplesBM <- unique(c(multiQCdatapaired$pair_sample1,multiQCdatapaired$pair_sample2))
+    missingSamples <- singleSamplesBM[!(singleSamplesBM %in% sapply(singleSamples,function(x) strsplit(x,"_")[[1]][1]))]
+    if(length(missingSamples) > 0){
+      sampleDirs <- list.dirs(paste0(rootDir,"QualityControl/multiQCfiles/"),full.names = F)
+      singleSamples <- c(singleSamples,sampleDirs[grep(paste0("^",missingSamples[1],"_PMCRZ"),sampleDirs)][1])
+    }
+    
+    dataList <- list()
+    for ( i in 1:length(singleSamples)){
+      curSampleDir <- list.dirs(paste0(rootDir,"QualityControl/multiQCfiles/",singleSamples[i]),recursive = T)[2]
+      if (is.na(curSampleDir)){
+        next
+      }
+      tempList <- list()
+      for ( j in 1:length(dataTypesSingle2)){
+        tempList[[j]] <- read.csv(paste0(curSampleDir,"/",dataTypesSingle2[j]),sep="\t",stringsAsFactors = F)
+        colnames(tempList[[j]]) <- paste(dataTypesSingle[j],colnames(tempList[[j]]),sep="_")
+      }
+      dataList[[i]] <- as.data.frame(t(unlist(tempList)))
+    }
+    
+    colnamesAll <- unique(unlist(lapply(dataList, function(x) colnames(x))))
+    
+    multiQCdataSingle <- as.data.frame(matrix(nrow=length(dataList),ncol=length(colnamesAll)))
+    colnames(multiQCdataSingle) <- colnamesAll
+    for ( i in 1:length(singleSamples)){
+      if ( !is.null(dataList[[i]])){
+        multiQCdataSingle[i,colnames(dataList[[i]])] <- as.matrix(dataList[[i]])   
+      }
+    }
+    rownames(multiQCdataSingle) <- sapply(singleSamples,function(x) paste(strsplit(x,"_")[[1]][c(1,2)],collapse="_"))
+    multiQCdataSingle[,"Biomaterial ID"] <- sapply(multiQCdataSingle$fastqc_Sample, function(x) strsplit(x,"_")[[1]][1])
+    
+    dups <- multiQCdataSingle$`Biomaterial ID`[duplicated(multiQCdataSingle$`Biomaterial ID`)]
+    multiQCdataSingle <- multiQCdataSingle[!(multiQCdataSingle$`Biomaterial ID` %in% dups),]
+    
     tempList <- list()
     for ( i in 1:nrow(multiQCdataSingle)){
-      tempList[[i]] <- as.vector(c(multiQCdataSingle[i,],multiQCdatapaired[grep(multiQCdataSingle$`Biomaterial ID`[i],multiQCdatapaired$`pair_Biomaterial ID pair`),]))
+      tempList[[i]] <- as.vector(c(multiQCdataSingle[i,],multiQCdatapaired[grep(multiQCdataSingle$`Biomaterial ID`[i],multiQCdatapaired$`pair_Biomaterial ID pair`)[1],]))
     }
     
     multiQCdata <- do.call(rbind,tempList)
@@ -220,7 +226,7 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
       metaData[i,c(1,2,3,4,7,9,10,12,14,15,17)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample1[i],c("PMCBS","HIX","PMABS","PMABM","PA-nummer","tumorPerc","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","pair_gatk_varianteval_novel_sites","verifybamid_FREEMIX","pair_tumor-normal_comparison_Ratio.as.expected.")]
       metaData[i,c(5,6,11,13,16)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample2[i],c("PMABS","PMABM","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX")]
       if(metaData[i,"PMABS tumor"] %in% itherList$PMABS.tumor){
-        metaData[i,"Vraagstelling"] <- paste("ITHER",itherList$Ither.nummer[itherList$PMABS.tumor == metaData[i,"PMABS tumor"]])
+        metaData[i,"Vraagstelling"] <- paste("iTHER",itherList$Ither.nummer[itherList$PMABS.tumor == metaData[i,"PMABS tumor"]])
       }else{
         metaData[i,"Vraagstelling"] <- "Diagnostiek"
       }
@@ -399,7 +405,7 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     vraagStelling <- rep("Diagnostiek",nrow(samples))
     for( i in 1:nrow(samples)){
       if(samples$PMABS[i] %in% itherList$PMABS.tumor){
-        vraagStelling[i] <- paste("ITHER",itherList$Ither.nummer[itherList$PMABS.tumor == samples$PMABS[i]])
+        vraagStelling[i] <- paste("iTHER",itherList$Ither.nummer[itherList$PMABS.tumor == samples$PMABS[i]])
       }
     }
     samples <- as.data.frame(cbind(samples[,c("PMCBS","HIX","PMABS","PMABM","Type.BS","PA-nummer")],vraagStelling,samples[,c("RIN")],BSlijst[samples$PMABS,"Tumor.%"]),stringsAsFactors=F)
@@ -1257,7 +1263,7 @@ mergeReports <- function(folder=folder, type=type){
       sampleBS <- qcdataRun$BioSource.ID[qcdataRun$Biomaterial.ID == samples[i]]
       sampleHIX <- qcdataRun$HIX.Nr[i]
       sampleHIXdir <- paste0(reportDir,sampleHIX)
-      ither <- qcdataRun$Vraagstelling[i]
+      ither <- qcdataRun[samples[i],"Vraagstelling"]
       if(!dir.exists(sampleHIXdir)){
         dir.create(sampleHIXdir)
       }
@@ -1377,7 +1383,7 @@ mergeReports <- function(folder=folder, type=type){
       sampleBS <- samplesBiosource[i]
       sampleHIX <- qcdataRun$HiX.Nr[i]
       sampleHIXdir <- paste0(reportDir,sampleHIX)
-      ither <- qcdataRun$Vraagstelling[i]
+      ither <- qcdataRun[samples[i],"Vraagstelling"]
       if(!dir.exists(sampleHIXdir)){
         dir.create(sampleHIXdir)
       }
@@ -1497,7 +1503,7 @@ generateReport <- function(folder=folder, type=type){
     rnaSeqOverview <- loadRNAseqOverview(folder=folder,samples=samples)
     for ( sample in samples ){
       printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview)
-      if(grepl("ITHER",qcdataRun[qcdataRun$Biomaterial.ID == sample,"Vraagstelling"])){
+      if(grepl("iTHER",qcdataRun[qcdataRun$Biomaterial.ID == sample,"Vraagstelling"])){
         printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview,ITHER=T)
       }
       message(paste("made",sample,"WTS report"))
@@ -1520,7 +1526,7 @@ generateReport <- function(folder=folder, type=type){
     wesOverview <- loadWESOverview(folder=folder,samples=samples)
     for ( sample in samples ){
       printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview)
-      if(grepl("ITHER",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])){
+      if(grepl("iTHER",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])){
         printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview,ITHER=T)
       }  
       message(paste("made",sample,"WES report"))
@@ -1640,6 +1646,7 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   #  png(paste(baseDirWTS,folder,"/",sample,"_WTSreport.png",sep=""), 12, 7, units="in", type="cairo", res=300, bg="white")
   if(ITHER){
     itherNr <- gsub(" ","_",qcdataRun[qcdataRun$Biomaterial.ID == sample,"Vraagstelling"])
+    itherNr <- sub("02-","",itherNr)
     pdf(paste(baseDirWTS,folder,"/",sample,"_",itherNr,"_WTSreport.pdf",sep=""), width = 12, height = 7, bg="white")
   }else{
     pdf(paste(baseDirWTS,folder,"/",sample,"_WTSreport.pdf",sep=""), width = 12, height = 7, bg="white")
@@ -1647,7 +1654,11 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   layout(mat = matrix(ncol=2,nrow=5,data=c(1,1,2,3,2,4,2,5,6,6),byrow = T),widths = c(1,1),heights = c(0.3,1,1,1,1))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
-  text(0.5,0.5,paste("HIX",qcdataRun[qcdataRun$Biomaterial.ID == sample,"HIX.Nr"],"-",sample,"- WTS Fusion Analysis"),cex=2)
+  if(ITHER){
+    text(0.5,0.5,paste("HIX",sample,"- WTS Fusion Analysis"),cex=2)
+  }else{
+    text(0.5,0.5,paste("HIX",qcdataRun[qcdataRun$Biomaterial.ID == sample,"HIX.Nr"],"-",sample,"- WTS Fusion Analysis"),cex=2)
+  }
   par(mar=c(5.1,4.1,2.1,2.1))
   frame()
   vps <- baseViewports()
@@ -1655,7 +1666,8 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   
   if(ITHER){
     tab <- rbind(folder,
-                 t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(1,3:7)]),
+                 t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(1,3:6)]),
+                 itherNr,
                  t(rnaSeqOverview[sample,c(13)]),
                  t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(8:12)]))
     rownames(tab) <- c("Seq Run ID","SKION ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","RIN","Tumor Cell %","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
@@ -1693,13 +1705,13 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   }else{
     cols["RIN",] <- "red"
   }
-  if(!is.na(tab["Tumor Cell %",])){
-    if(as.numeric(tab["Tumor Cell %",]) < 20){
-      cols["Tumor Cell %",] <- "red"
-    }
-  }else{
-    cols["Tumor Cell %",] <- "red"
-  }
+#  if(!is.na(tab["Tumor Cell %",])){
+#    if(as.numeric(tab["Tumor Cell %",]) < 20){
+#      cols["Tumor Cell %",] <- "red"
+#    }
+#  }else{
+#    cols["Tumor Cell %",] <- "red"
+#  }
   tt <- ttheme_default(core=list(fg_params = list(col = cols)))
   grob <-  tableGrob(tab,cols=NULL,theme = tt)  
   grid.draw(grob)
@@ -1723,6 +1735,7 @@ printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverv
   #png(paste(baseDirWES,folder,"/",sample,"_WESreport.png",sep=""), 12, 7, units="in", type="cairo", res=300, bg="white")
   if(ITHER){
     itherNr <- gsub(" ","_",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])
+    itherNr <- sub("02-","",itherNr)
     pdf(paste(baseDirWES,folder,"/",sample,"_",itherNr,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
   }else{
     pdf(paste(baseDirWES,folder,"/",sample,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
@@ -1730,14 +1743,19 @@ printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverv
   layout(mat = matrix(ncol=2,nrow=5,data=c(1,1,2,3,2,4,2,5,6,6),byrow = T),widths = c(1,1),heights = c(0.3,1,1,1,1.5))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
-  text(0.5,0.5,paste("HIX",qcdataRun[qcdataRun$PMABM.tumor == sample,"HiX.Nr"],"-",sample,"- WES Variant Analysis -",wesOverview[which(wesOverview$`Biomaterial ID` == sample)[1],"Panel"]),cex=2)
+  if(ITHER){
+    text(0.5,0.5,paste(sample,"- WES Variant Analysis -",wesOverview[which(wesOverview$`Biomaterial ID` == sample)[1],"Panel"]),cex=2)
+  }else{
+    text(0.5,0.5,paste("HIX",qcdataRun[qcdataRun$PMABM.tumor == sample,"HiX.Nr"],"-",sample,"- WES Variant Analysis -",wesOverview[which(wesOverview$`Biomaterial ID` == sample)[1],"Panel"]),cex=2)
+  }
   par(mar=c(5.1,4.1,2.1,2.1))
   frame()
   vps <- baseViewports()
   pushViewport(vps$inner, vps$figure, vps$plot)
   if(ITHER){
     tab <- rbind(folder,
-                 t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(1,3:8)]),
+                 t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(1,3:7)]),
+                 itherNr,
                  t(wesOverview[wesOverview$`Biomaterial ID` == sample,c(13)][1]),
                  t(qcdataRun[qcdataRun$PMABM.tumor == sample,c(9,12:17)]))
     rownames(tab) <- c("Seq Run ID","SKION ID","Biosource ID Tumor","Biomaterial ID Tumor","Biosource ID Normal","Biomaterial ID Normal","T-number","Vraagstelling","Diagnosis","Tumor Cell %","Mean Coverage Tumor","Mean Coverage Normal","Novel Variants","Contamination Tumor","Contamination Normal","Tumor Normal match")
