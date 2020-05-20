@@ -1,3 +1,11 @@
+## to do: ##
+## adapt size of overview sheet based on number of variants found ##
+## make function for reading in data links documents ##
+## finetune metadata sheet creation for WES regarding trio analysis ##
+## integrate mutational signatures ##
+
+
+
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
   install.packages(setdiff(packages, rownames(installed.packages())))  
@@ -223,8 +231,9 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     metaData <- as.data.frame(matrix(nrow=nrow(multiQCdatapaired),ncol=17))
     colnames(metaData) <- c("Skion ID","HiX Nr","PMABS tumor","PMABM tumor","PMABS normal","PMABM normal","T-nummer","Vraagstelling","Tumor perc","UniqueReadsTumor(10^6)","UniqueReadsNormal(10^6)","MeanCoverageTumor","MeanCoverageNormal","novelVariants","ContaminationTumor","ContaminationNormal","TumorNormalCheck")
     for ( i in 1:nrow(metaData)){
-      metaData[i,c(1,2,3,4,7,9,10,12,14,15,17)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample1[i],c("PMCBS","HIX","PMABS","PMABM","PA-nummer","tumorPerc","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","pair_gatk_varianteval_novel_sites","verifybamid_FREEMIX","pair_tumor-normal_comparison_Ratio.as.expected.")]
+      metaData[i,c(1,2,3,4,7,9,10,12,15,17)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample1[i],c("PMCBS","HIX","PMABS","PMABM","PA-nummer","tumorPerc","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX","pair_tumor-normal_comparison_Ratio.as.expected.")]
       metaData[i,c(5,6,11,13,16)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample2[i],c("PMABS","PMABM","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX")]
+      metaData[i,14] <- multiQCdatapaired[i,"pair_gatk_varianteval_novel_sites"]
       if(metaData[i,"PMABS tumor"] %in% itherList$PMABS.tumor){
         metaData[i,"Vraagstelling"] <- paste("iTHER",itherList$Ither.nummer[itherList$PMABS.tumor == metaData[i,"PMABS tumor"]])
       }else{
