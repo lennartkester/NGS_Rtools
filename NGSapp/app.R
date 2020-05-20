@@ -11,8 +11,8 @@ tumorChoices <- c("NULL",tumorChoices[order(tumorChoices)])
 sampleChoices <- "First select seq run"
 
 # Define UI for dataset viewer app ----
-ui <- navbarPage("PMC NGS R tools",
-                 tabPanel("Metadata and reports",               
+ui <- navbarPage("PMC NGS R tools", 
+                 tabPanel(tags$b("Metadata and reports"),              
                           # row layout with input and output definitions ----
                           fluidRow(
                             column(4,titlePanel(h4("Generate metadata and get files")),selectInput("seqrunMeta", "Choose a seq run:",choices = inputChoices)),
@@ -25,10 +25,10 @@ ui <- navbarPage("PMC NGS R tools",
                             column(4,selectInput("typeMergeReport", "Choose a type:",choices = c("WTS","WES")))
                           ),
                           fluidRow(
-                            column(2,actionButton("getMetadata", "Make metadata", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
+                            column(2,actionButton("getMetadata", tags$b("Make metadata"), icon("paper-plane"), style="color: #fff; background-color: #fd8723; border-color: #ffffff")),
                             column(2,actionButton("refreshFolders", "Refresh")),
-                            column(4,actionButton("makeReport", "Make reports", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
-                            column(4,actionButton("mergeReport", "Merge reports", icon("paper-plane"), style="color: #fff; background-color: #337ab7; border-color: #2e6da4"))
+                            column(4,actionButton("makeReport", tags$b("Make reports"), icon("paper-plane"), style="color: #fff; background-color: #fd8723; border-color: #ffffff")),
+                            column(4,actionButton("mergeReport", tags$b("Merge reports"), icon("paper-plane"), style="color: #fff; background-color: #fd8723; border-color: #ffffff"))
                           ),
                           fluidRow(
                             br(),
@@ -36,7 +36,7 @@ ui <- navbarPage("PMC NGS R tools",
                             mainPanel(width = 12,tableOutput("messages"))
                           )
                  ),
-                 tabPanel("Check expression",
+                 tabPanel(tags$b("Check expression"),
                           fluidRow(
                             column(4,titlePanel(h4("Check expression data")))
                           ),
@@ -47,7 +47,7 @@ ui <- navbarPage("PMC NGS R tools",
                             column(2,textInput("geneExpression","Gene",value = NULL))
                           ),
                           fluidRow(
-                            column(4,actionButton("checkExpression", "Plot expression", style="color: #fff; background-color: #337ab7; border-color: #2e6da4")),
+                            column(4,actionButton("checkExpression", tags$b("Plot expression"), style="color: #fff; background-color: #fd8723; border-color: #ffffff")),
                             column(4,checkboxInput("makePdf","make PDF"))
                           ),
                           fluidRow(
@@ -56,8 +56,20 @@ ui <- navbarPage("PMC NGS R tools",
                             mainPanel(width = 12,plotOutput("plot")
                             )
                           )
-                 )
+                 ),
+                 tags$style(HTML(" 
+        .navbar-default .navbar-brand {color: #ffffff;}
+                                 .navbar { background-color: #fd8723;}
+                                 .navbar-default .navbar-nav > li > a {color:#ffffff;}
+                                 "))
 )
+
+#                                  .navbar-default .navbar-nav > .active > a:hover {color: #ffffff;background-color: fca768;}
+#                                 .navbar-default .navbar-nav > li > a[data-value='t1'] {color: red;background-color: pink;}
+#.navbar-default .navbar-nav > li > a[data-value='t2'] {color: blue;background-color: lightblue;}
+#.navbar-default .navbar-nav > li > a[data-value='t3'] {color: green;background-color: lightgreen;}
+#                                 .navbar-default .navbar-nav > .active > a,
+#.navbar-default .navbar-nav > .active > a:focus,
 
 
 # Define server logic to summarize and view selected dataset ----
