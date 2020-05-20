@@ -1,7 +1,5 @@
 ## to do: ##
-## adapt size of overview sheet based on number of variants found ##
 ## make function for reading in data links documents ##
-## finetune metadata sheet creation for WES regarding trio analysis ##
 ## integrate mutational signatures ##
 
 
@@ -1741,15 +1739,21 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
 }
 
 printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverview,ITHER=F){
+
+  if (sum(wesOverview$`Biomaterial ID` == sample) > 4){
+    additionalHeight <- (sum(wesOverview$`Biomaterial ID` == sample)-4)/2.5
+  }else{
+    additionalHeight <- 0
+  }
   #png(paste(baseDirWES,folder,"/",sample,"_WESreport.png",sep=""), 12, 7, units="in", type="cairo", res=300, bg="white")
   if(ITHER){
     itherNr <- gsub(" ","_",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])
     itherNr <- sub("02-","",itherNr)
-    pdf(paste(baseDirWES,folder,"/",sample,"_",itherNr,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
+    pdf(paste(baseDirWES,folder,"/",sample,"_",itherNr,"_WESreport.pdf",sep=""), width = 12, height = (7 + additionalHeight), bg="white")
   }else{
-    pdf(paste(baseDirWES,folder,"/",sample,"_WESreport.pdf",sep=""), width = 12, height = 7, bg="white")
+    pdf(paste(baseDirWES,folder,"/",sample,"_WESreport.pdf",sep=""), width = 12, height = (7 + additionalHeight), bg="white")
   }
-  layout(mat = matrix(ncol=2,nrow=5,data=c(1,1,2,3,2,4,2,5,6,6),byrow = T),widths = c(1,1),heights = c(0.3,1,1,1,1.5))
+  layout(mat = matrix(ncol=2,nrow=5,data=c(1,1,2,3,2,4,2,5,6,6),byrow = T),widths = c(1,1),heights = c(c(0.3,1.2,1.2,1.2),(1.5 + additionalHeight)/((7+additionalHeight)/7)))
   par(mar=c(0,0,0,0))
   plot(1,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F)
   if(ITHER){
