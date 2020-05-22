@@ -50,30 +50,7 @@ getFileList <- function(seqRunDir,rootDir,pattern){
 makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
   date <- Sys.Date()
   date <- gsub("-","_",date)
-  # files <- list.files(paste0(rootDir,seqRunDir),
-  #                     full.names = T,
-  #                     recursive = T,
-  #                     pattern = ".docx")
-  # files <- files[grep("inks",files)]
-  # files <- files[grep("\\~\\$",files,invert = T)]
-  # 
-  # if (identical(files,character(0))){
-  #   return(1)
-  # }else{
-  #   
-  #   filetext <- readtext(files)
-  #   perLine <- strsplit(filetext$text,"http://|.vcf")[[1]]
-  #   vcfFiles <- perLine[grep("WXS.qci",perLine)]
-  #   
-  #   
-  #   for ( i in 1:length(vcfFiles)){
-  #     vcfFiles[i] <- gsub("HYPERLINK","",vcfFiles[i])
-  #     vcfFiles[i] <- paste0("http://files",strsplit(vcfFiles[i],"files")[[1]][2])
-  #     vcfFiles[i] <- paste0(strsplit(vcfFiles[i],"WXS.qci")[[1]][1],"WXS.qci.vcf")
-  #   }
-  #   
-  #   vcfFiles <- unique(vcfFiles)
-    
+
   vcfFiles <- getFileList(seqRunDir,rootDir,"WXS.qci.vcf")
   if(identical(vcfFiles,1)){
     return(1)
@@ -86,15 +63,6 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     
     
     multiQCfiles <- getFileList(seqRunDir, rootDir, "multiqc_data.zip")
-    
-    # for ( i in 1:length(multiQCfiles)){
-    #   multiQCfiles[i] <- gsub("HYPERLINK","",multiQCfiles[i])
-    #   multiQCfiles[i] <- paste0("http://files",strsplit(multiQCfiles[i],"files")[[1]][2])
-    #   multiQCfiles[i] <- paste0(strsplit(multiQCfiles[i],"multiqc_data")[[1]][1],"multiqc_data.zip")
-    # }
-    # 
-    # multiQCfiles <- unique(multiQCfiles)
-    # multiQCfiles <- multiQCfiles[grep("multi",multiQCfiles)]
     
     downloadedSamples <- list.files(paste0(rootDir,"QualityControl/multiQCfiles/"),pattern = "zip",full.names = T)
     
@@ -293,40 +261,26 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
 makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
   date <- Sys.Date()
   date <- gsub("-","_",date)
-  files <- list.files(paste0(rootDir,seqRunDir),
-                      full.names = T,
-                      recursive = T,
-                      pattern = ".docx")
-  files <- files[grep("inks",files)]
-  files <- files[grep("\\~\\$",files,invert = T)]
-  
-  if (identical(files,character(0))){
+
+  fusionFiles <- getFileList(seqRunDir,rootDir,"star-fusion_predicted.annotated.filtered.tsv")
+  if(identical(fusionFiles,1)){
     return(1)
+      
   }else{
     
-    filetext <- readtext(files)
-    perLine <- strsplit(filetext$text,"http://|tsv")[[1]]
-    fusionFiles <- perLine[grep("star-fusion_predicted.annotated.filtered",perLine)]
-    
-    for ( i in 1:length(fusionFiles)){
-      fusionFiles[i] <- paste0("http://",fusionFiles[i],"tsv")
-    }
-    fusionFiles <- unique(fusionFiles)
     samples <- sapply(sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",fusionFiles),function(x) strsplit(x,"_")[[1]][1])
     
     dataList <- list()
-    multiQCfiles <- perLine[grep("multiqc_data.zip",perLine)]
-    multiQCfiles <- paste("http://",unique(sapply(multiQCfiles,function(x) strsplit(x,"multiqc_data.zip")[[1]][1])),"multiqc_data.zip",sep="")
+    multiQCfiles <- getFileList(seqRunDir,rootDir,"multiqc_data.zip")
     for ( i in 1:length(multiQCfiles)){
       fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",multiQCfiles[i])
-      qcFileName <- sub(".zip","",paste(strsplit(fileName,split = "_")[[1]][c(1,3,4)],collapse="_"))
       destFile <- paste(baseDirWTS,"QualityControl/multiQCfiles/",fileName,sep="")
       GET(multiQCfiles[i], authenticate("lkester", "Dm1mYaiS"),write_disk(destFile,overwrite = T))
       destDir <- sub("_RNA-Seq.multiqc_data.zip","",destFile)
       if ( !dir.exists(destDir)){
         dir.create(destDir,showWarnings = F)  
         unzip(destFile,exdir = destDir)
-      }else if(!dir.exists(paste(destDir,"/",qcFileName,sep=""))){
+      }else if(!dir.exists(paste(destDir,"/",fileName,sep=""))){
         unzip(destFile,exdir = destDir)
       }  
       
