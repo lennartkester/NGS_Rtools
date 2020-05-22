@@ -26,33 +26,58 @@ fileList$bslijst <- "G://Diagnostisch Lab/Laboratorium/Histologie/BioSource aanm
 fileList$NGSdiagnostiek <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Mol-NGS/NGS_Diagnostiek/NGS-Diagnostiek_v3.0.xlsx"
 fileList$ither <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Isolaties/iTHER/Ither overzicht.xlsx"
 
-makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
-  date <- Sys.Date()
-  date <- gsub("-","_",date)
+
+getFileList <- function(seqRunDir,rootDir,pattern){
   files <- list.files(paste0(rootDir,seqRunDir),
                       full.names = T,
                       recursive = T,
                       pattern = ".docx")
   files <- files[grep("inks",files)]
   files <- files[grep("\\~\\$",files,invert = T)]
-  
   if (identical(files,character(0))){
     return(1)
   }else{
     
     filetext <- readtext(files)
-    perLine <- strsplit(filetext$text,"http://|.vcf")[[1]]
-    vcfFiles <- perLine[grep("WXS.qci",perLine)]
+    perLine <- strsplit(filetext$text,"\n")[[1]]
+    targetFiles <- perLine[grep(pattern,perLine)]
+    targetFiles <- paste0("http://",sapply(targetFiles, function(x) strsplit(strsplit(x,"http://")[[1]][2],pattern)[[1]][1]),pattern)
     
+    return(unique(targetFiles))
+  }  
+}
+
+makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
+  date <- Sys.Date()
+  date <- gsub("-","_",date)
+  # files <- list.files(paste0(rootDir,seqRunDir),
+  #                     full.names = T,
+  #                     recursive = T,
+  #                     pattern = ".docx")
+  # files <- files[grep("inks",files)]
+  # files <- files[grep("\\~\\$",files,invert = T)]
+  # 
+  # if (identical(files,character(0))){
+  #   return(1)
+  # }else{
+  #   
+  #   filetext <- readtext(files)
+  #   perLine <- strsplit(filetext$text,"http://|.vcf")[[1]]
+  #   vcfFiles <- perLine[grep("WXS.qci",perLine)]
+  #   
+  #   
+  #   for ( i in 1:length(vcfFiles)){
+  #     vcfFiles[i] <- gsub("HYPERLINK","",vcfFiles[i])
+  #     vcfFiles[i] <- paste0("http://files",strsplit(vcfFiles[i],"files")[[1]][2])
+  #     vcfFiles[i] <- paste0(strsplit(vcfFiles[i],"WXS.qci")[[1]][1],"WXS.qci.vcf")
+  #   }
+  #   
+  #   vcfFiles <- unique(vcfFiles)
     
-    for ( i in 1:length(vcfFiles)){
-      vcfFiles[i] <- gsub("HYPERLINK","",vcfFiles[i])
-      vcfFiles[i] <- paste0("http://files",strsplit(vcfFiles[i],"files")[[1]][2])
-      vcfFiles[i] <- paste0(strsplit(vcfFiles[i],"WXS.qci")[[1]][1],"WXS.qci.vcf")
-    }
-    
-    vcfFiles <- unique(vcfFiles)
-    
+  vcfFiles <- getFileList(seqRunDir,rootDir,"WXS.qci.vcf")
+  if(identical(vcfFiles,1)){
+    return(1)
+  }else{
     for ( i in 1:length(vcfFiles)){
       fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/WXS/","",vcfFiles[i])
       destFile <- paste(rootDir,seqRunDir,"/",fileName,sep="")
@@ -60,24 +85,21 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     }
     
     
-    perLine <- strsplit(filetext$text,"http://|zip")[[1]]
-    multiQCfiles <- perLine[grep("multiqc_data",perLine)]
+    multiQCfiles <- getFileList(seqRunDir, rootDir, "multiqc_data.zip")
     
-    
-    for ( i in 1:length(multiQCfiles)){
-      multiQCfiles[i] <- gsub("HYPERLINK","",multiQCfiles[i])
-      multiQCfiles[i] <- paste0("http://files",strsplit(multiQCfiles[i],"files")[[1]][2])
-      multiQCfiles[i] <- paste0(strsplit(multiQCfiles[i],"multiqc_data")[[1]][1],"multiqc_data.zip")
-    }
-    
-    multiQCfiles <- unique(multiQCfiles)
-    multiQCfiles <- multiQCfiles[grep("multi",multiQCfiles)]
+    # for ( i in 1:length(multiQCfiles)){
+    #   multiQCfiles[i] <- gsub("HYPERLINK","",multiQCfiles[i])
+    #   multiQCfiles[i] <- paste0("http://files",strsplit(multiQCfiles[i],"files")[[1]][2])
+    #   multiQCfiles[i] <- paste0(strsplit(multiQCfiles[i],"multiqc_data")[[1]][1],"multiqc_data.zip")
+    # }
+    # 
+    # multiQCfiles <- unique(multiQCfiles)
+    # multiQCfiles <- multiQCfiles[grep("multi",multiQCfiles)]
     
     downloadedSamples <- list.files(paste0(rootDir,"QualityControl/multiQCfiles/"),pattern = "zip",full.names = T)
     
     for ( i in 1:length(multiQCfiles)){
       fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/WXS/","",multiQCfiles[i])
-      qcFileName <- sub(".zip","",paste(strsplit(fileName,split = "_")[[1]][c(1,3,4)],collapse="_"))
       destFile <- paste(rootDir,"QualityControl/multiQCfiles/",fileName,sep="")
       if ( !(destFile %in% downloadedSamples)){
         GET(multiQCfiles[i], authenticate("lkester", "Dm1mYaiS"),write_disk(destFile,overwrite = T))
@@ -86,7 +108,7 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
       if ( !dir.exists(destDir)){
         dir.create(destDir,showWarnings = F)  
         unzip(destFile,exdir = destDir)
-      }else if(!dir.exists(paste(destDir,"/",qcFileName,sep=""))){
+      }else if(!dir.exists(paste(destDir,"/",sub(".zip","",fileName),sep=""))){
         unzip(destFile,exdir = destDir)
       }
     }
@@ -193,9 +215,18 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
       multiQCdata <- rbind(multiQCdata,qcdataAll[qcdataAll$`Biomaterial ID` == missingSample,colnames(multiQCdata)])
       
     }
-    
+
     BMlist <- as.data.frame(as.matrix(read.xlsx(fileList$bmlijst)),stringsAsFactors = F)
     BMinfo <- BMlist[BMlist$PMABM %in% samples,c("PMCBS","HIX","PMABS","PMABM","Type.BS","PA-nummer","DIN")]
+    
+    otherSamples <- samples[!(samples %in% BMinfo$PMABM)]
+    otherMatrix <- as.data.frame(matrix(ncol=ncol(BMinfo),nrow=length(otherSamples)))
+    colnames(otherMatrix) <- colnames(BMinfo)
+    otherMatrix$PMABM <- otherSamples
+    otherMatrix$PMABS <- otherSamples
+    
+    BMinfo <- rbind(BMinfo,otherMatrix)
+    
     rownames(BMinfo) <- BMinfo$PMABM
     
     multiQCdata <- cbind(multiQCdata,BMinfo[multiQCdata$`Biomaterial ID`,])
@@ -217,7 +248,13 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     
     BSlijst <- read.xlsx(fileList$bslijst)
     BSlijst <- BSlijst[BSlijst$PMABS %in% multiQCdata$PMABS,c("Tumor.%","PMABS")]
+    otherBS <- multiQCdata$PMABS[!(multiQCdata$PMABS %in% BSlijst$PMABS)]
+    otherBSMat <- matrix(ncol=2,nrow=length(otherBS))
+    colnames(otherBSMat) <- colnames(BSlijst)
+    otherBSMat[,"PMABS"] <- otherBS
+    BSlijst <- rbind(BSlijst,otherBSMat)
     rownames(BSlijst) <- BSlijst$PMABS
+    
     multiQCdata <- cbind(multiQCdata,BSlijst[multiQCdata$PMABS,"Tumor.%"])
     colnames(multiQCdata)[ncol(multiQCdata)] <- "tumorPerc"
     multiQCdata$tumorPerc <- as.character(multiQCdata$tumorPerc)
@@ -429,7 +466,11 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     otherMatrix$`Biomaterial ID` <- otherSamples
     otherMatrix$Vraagstelling[grep("PMRBM",otherMatrix$`Biomaterial ID`)] <- "Research"
     otherMatrix$Vraagstelling[grep("PMOBM",otherMatrix$`Biomaterial ID`)] <- "Organoid"
-    
+    NGSlist <- NGSlist[!is.na(NGSlist$PMABM),]
+    for ( i in 1:nrow(otherMatrix)){
+      otherMatrix[i,c("SKION ID","HIX Nr","BioSource ID","Materiaal","Weefsel#","RIN","input(ng)")] <- NGSlist[NGSlist$PMABM == otherMatrix$`Biomaterial ID`[i],c("PMCBS","HIX","PMABS","Type.BS","PA-nummer","RIN","totaal.in.oprep")]
+      otherMatrix[i,c("yield(fmol)","uniqueReads(10^6)")] <- c(round(metaData[otherMatrix$`Biomaterial ID`[i],"yield"],0),round(metaData[otherMatrix$`Biomaterial ID`[i],"unique_reads"]/1000000,0))
+    }
     samples <- rbind(samples,otherMatrix)
     
     tryCatch(write.xlsx(samples,paste0(baseDirWTS,seqRunDir,"/metaData_LKR.xlsx"),colNames = T,overwrite=T),error = function(e) print("metadata file already exists") ) 
