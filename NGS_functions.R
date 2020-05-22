@@ -43,7 +43,7 @@ getFileList <- function(seqRunDir,rootDir,pattern){
     targetFiles <- perLine[grep(pattern,perLine)]
     targetFiles <- paste0("http://",sapply(targetFiles, function(x) strsplit(strsplit(x,"http://")[[1]][2],pattern)[[1]][1]),pattern)
     
-    return(unique(targetFiles))
+    return(list("targetFiles"=unique(targetFiles),"perLine"=perLine))
   }  
 }
 
@@ -51,7 +51,8 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
   date <- Sys.Date()
   date <- gsub("-","_",date)
 
-  vcfFiles <- getFileList(seqRunDir,rootDir,"WXS.qci.vcf")
+  dataLinks <- getFileList(seqRunDir,rootDir,"WXS.qci.vcf")
+  vcfFiles <- dataLinks$targetFiles
   if(identical(vcfFiles,1)){
     return(1)
   }else{
@@ -62,7 +63,7 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     }
     
     
-    multiQCfiles <- getFileList(seqRunDir, rootDir, "multiqc_data.zip")
+    multiQCfiles <- getFileList(seqRunDir, rootDir, "multiqc_data.zip")$targetFiles
     
     downloadedSamples <- list.files(paste0(rootDir,"QualityControl/multiQCfiles/"),pattern = "zip",full.names = T)
     
@@ -217,10 +218,12 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     BSlijst <- read.xlsx(fileList$bslijst)
     BSlijst <- BSlijst[BSlijst$PMABS %in% multiQCdata$PMABS,c("Tumor.%","PMABS")]
     otherBS <- multiQCdata$PMABS[!(multiQCdata$PMABS %in% BSlijst$PMABS)]
-    otherBSMat <- matrix(ncol=2,nrow=length(otherBS))
-    colnames(otherBSMat) <- colnames(BSlijst)
-    otherBSMat[,"PMABS"] <- otherBS
-    BSlijst <- rbind(BSlijst,otherBSMat)
+    if (length(otherBS) > 0){
+      otherBSMat <- matrix(ncol=2,nrow=length(otherBS))
+      colnames(otherBSMat) <- colnames(BSlijst)
+      otherBSMat[,"PMABS"] <- otherBS
+      BSlijst <- rbind(BSlijst,otherBSMat)
+    }
     rownames(BSlijst) <- BSlijst$PMABS
     
     multiQCdata <- cbind(multiQCdata,BSlijst[multiQCdata$PMABS,"Tumor.%"])
@@ -262,7 +265,8 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
   date <- Sys.Date()
   date <- gsub("-","_",date)
 
-  fusionFiles <- getFileList(seqRunDir,rootDir,"star-fusion_predicted.annotated.filtered.tsv")
+  dataLinks <- getFileList(seqRunDir,rootDir,"star-fusion_predicted.annotated.filtered.tsv")
+  fusionFiles <- dataLinks$targetFiles
   if(identical(fusionFiles,1)){
     return(1)
       
@@ -271,7 +275,7 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     samples <- sapply(sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",fusionFiles),function(x) strsplit(x,"_")[[1]][1])
     
     dataList <- list()
-    multiQCfiles <- getFileList(seqRunDir,rootDir,"multiqc_data.zip")
+    multiQCfiles <- getFileList(seqRunDir,rootDir,"multiqc_data.zip")$targetFiles
     for ( i in 1:length(multiQCfiles)){
       fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",multiQCfiles[i])
       destFile <- paste(baseDirWTS,"QualityControl/multiQCfiles/",fileName,sep="")
@@ -330,7 +334,8 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     
     samplesDone <- c()
     metaList <- list()
-    perLine2 <- strsplit(filetext$text,"\n")[[1]]
+    
+    perLine2 <- dataLinks$perLine
     dir.create(paste0(baseDirWTS,seqRunDir,"/tsvFiles/"),showWarnings = F)
     for ( i in 1:length(fusionFiles)){
       fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",fusionFiles[i])
@@ -415,17 +420,19 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","Vraagstelling","RIN","TumorPercentage","yield(fmol)","uniqueReads(10^6)","input(ng)")
     samples$RIN <- round(as.numeric(as.character(samples$RIN)),1)
     otherSamples <- samplesDone[!(samplesDone %in% BMlist$PMABM)]
-    otherMatrix <- as.data.frame(matrix(ncol=ncol(samples),nrow=length(otherSamples)))
-    colnames(otherMatrix) <- colnames(samples)
-    otherMatrix$`Biomaterial ID` <- otherSamples
-    otherMatrix$Vraagstelling[grep("PMRBM",otherMatrix$`Biomaterial ID`)] <- "Research"
-    otherMatrix$Vraagstelling[grep("PMOBM",otherMatrix$`Biomaterial ID`)] <- "Organoid"
-    NGSlist <- NGSlist[!is.na(NGSlist$PMABM),]
-    for ( i in 1:nrow(otherMatrix)){
-      otherMatrix[i,c("SKION ID","HIX Nr","BioSource ID","Materiaal","Weefsel#","RIN","input(ng)")] <- NGSlist[NGSlist$PMABM == otherMatrix$`Biomaterial ID`[i],c("PMCBS","HIX","PMABS","Type.BS","PA-nummer","RIN","totaal.in.oprep")]
-      otherMatrix[i,c("yield(fmol)","uniqueReads(10^6)")] <- c(round(metaData[otherMatrix$`Biomaterial ID`[i],"yield"],0),round(metaData[otherMatrix$`Biomaterial ID`[i],"unique_reads"]/1000000,0))
+    if(length(otherSamples) > 0){
+      otherMatrix <- as.data.frame(matrix(ncol=ncol(samples),nrow=length(otherSamples)))
+      colnames(otherMatrix) <- colnames(samples)
+      otherMatrix$`Biomaterial ID` <- otherSamples
+      otherMatrix$Vraagstelling[grep("PMRBM",otherMatrix$`Biomaterial ID`)] <- "Research"
+      otherMatrix$Vraagstelling[grep("PMOBM",otherMatrix$`Biomaterial ID`)] <- "Organoid"
+      NGSlist <- NGSlist[!is.na(NGSlist$PMABM),]
+      for ( i in 1:nrow(otherMatrix)){
+        otherMatrix[i,c("SKION ID","HIX Nr","BioSource ID","Materiaal","Weefsel#","RIN","input(ng)")] <- NGSlist[NGSlist$PMABM == otherMatrix$`Biomaterial ID`[i],c("PMCBS","HIX","PMABS","Type.BS","PA-nummer","RIN","totaal.in.oprep")]
+        otherMatrix[i,c("yield(fmol)","uniqueReads(10^6)")] <- c(round(metaData[otherMatrix$`Biomaterial ID`[i],"yield"],0),round(metaData[otherMatrix$`Biomaterial ID`[i],"unique_reads"]/1000000,0))
+      }
+      samples <- rbind(samples,otherMatrix)
     }
-    samples <- rbind(samples,otherMatrix)
     
     tryCatch(write.xlsx(samples,paste0(baseDirWTS,seqRunDir,"/metaData_LKR.xlsx"),colNames = T,overwrite=T),error = function(e) print("metadata file already exists") ) 
     #return(paste("Created excelsheets and metadata for",nrow(samples),"samples"))
@@ -434,55 +441,55 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
 }
 
 makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
-  setwd(paste0(baseDirWTS,"QualityControl/RstudioQualityControl"))
+  #setwd(paste0(baseDirWTS,"QualityControl/RstudioQualityControl"))
   
   
-  ## exract names of the multiqc files from word documents ##
-  
-  date <- Sys.Date()
-  data <- gsub("-","_",date)
-  files <- list.files(baseDirWTS,
-                      full.names = T,
-                      recursive = T,
-                      pattern = ".docx")
-  
-  ## remove incorrect data files and word document related to fusion genes ##
-  files <- files[grep("niet correcte|Analyse|\\~\\$",files,invert = T)]
-  
-  multiQClist <- list()
-  for ( i in 1:length(files)){
-    filetext <- readtext(files[i])
-    perLine <- strsplit(filetext$text,"http://|###")[[1]]
-    multiQClist[[i]] <- perLine[grep("RNA-Seq.multiqc_data.zip",perLine)]
-  }
-  
-  multiQCfiles <- unlist(multiQClist)
-  for ( i in 1:length(multiQCfiles)){
-    multiQCfiles[i] <- gsub("HYPERLINK","",multiQCfiles[i])
-    multiQCfiles[i] <- paste0("http://files",strsplit(multiQCfiles[i],"files")[[1]][2])
-    multiQCfiles[i] <- paste0(strsplit(multiQCfiles[i],"zip")[[1]][1],"zip")
-  }
-  
-  multiQCfiles <- unique(multiQCfiles)
-  multiQCfiles <- multiQCfiles[grep("multi",multiQCfiles)]
-  
-  downloadedSamples <- list.files(paste0(baseDirWTS,"QualityControl/multiQCfiles/"),pattern = "zip",full.names = T)
-  
-  for ( i in 1:length(multiQCfiles)){
-    fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",multiQCfiles[i])
-    qcFileName <- sub(".zip","",paste(strsplit(fileName,split = "_")[[1]][c(1,3,4)],collapse="_"))
-    destFile <- paste(baseDirWTS,"QualityControl/multiQCfiles/",fileName,sep="")
-    if ( !(destFile %in% downloadedSamples)){
-      GET(multiQCfiles[i], authenticate("lkester", "Dm1mYaiS"),write_disk(destFile,overwrite = T))
-    }
-    destDir <- sub("_RNA-Seq.multiqc_data.zip","",destFile)
-    if ( !dir.exists(destDir)){
-      dir.create(destDir,showWarnings = F)  
-      unzip(destFile,exdir = destDir)
-    }else if(!dir.exists(paste(destDir,"/",qcFileName,sep=""))){
-      unzip(destFile,exdir = destDir)
-    }
-  }
+  # ## exract names of the multiqc files from word documents ##
+  # 
+  # date <- Sys.Date()
+  # data <- gsub("-","_",date)
+  # files <- list.files(baseDirWTS,
+  #                     full.names = T,
+  #                     recursive = T,
+  #                     pattern = ".docx")
+  # 
+  # ## remove incorrect data files and word document related to fusion genes ##
+  # files <- files[grep("niet correcte|Analyse|\\~\\$",files,invert = T)]
+  # 
+  # multiQClist <- list()
+  # for ( i in 1:length(files)){
+  #   filetext <- readtext(files[i])
+  #   perLine <- strsplit(filetext$text,"http://|###")[[1]]
+  #   multiQClist[[i]] <- perLine[grep("RNA-Seq.multiqc_data.zip",perLine)]
+  # }
+  # 
+  # multiQCfiles <- unlist(multiQClist)
+  # for ( i in 1:length(multiQCfiles)){
+  #   multiQCfiles[i] <- gsub("HYPERLINK","",multiQCfiles[i])
+  #   multiQCfiles[i] <- paste0("http://files",strsplit(multiQCfiles[i],"files")[[1]][2])
+  #   multiQCfiles[i] <- paste0(strsplit(multiQCfiles[i],"zip")[[1]][1],"zip")
+  # }
+  # 
+  # multiQCfiles <- unique(multiQCfiles)
+  # multiQCfiles <- multiQCfiles[grep("multi",multiQCfiles)]
+  # 
+  # downloadedSamples <- list.files(paste0(baseDirWTS,"QualityControl/multiQCfiles/"),pattern = "zip",full.names = T)
+  # 
+  # for ( i in 1:length(multiQCfiles)){
+  #   fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",multiQCfiles[i])
+  #   qcFileName <- sub(".zip","",paste(strsplit(fileName,split = "_")[[1]][c(1,3,4)],collapse="_"))
+  #   destFile <- paste(baseDirWTS,"QualityControl/multiQCfiles/",fileName,sep="")
+  #   if ( !(destFile %in% downloadedSamples)){
+  #     GET(multiQCfiles[i], authenticate("lkester", "Dm1mYaiS"),write_disk(destFile,overwrite = T))
+  #   }
+  #   destDir <- sub("_RNA-Seq.multiqc_data.zip","",destFile)
+  #   if ( !dir.exists(destDir)){
+  #     dir.create(destDir,showWarnings = F)  
+  #     unzip(destFile,exdir = destDir)
+  #   }else if(!dir.exists(paste(destDir,"/",qcFileName,sep=""))){
+  #     unzip(destFile,exdir = destDir)
+  #   }
+  # }
   
   
   dataTypes <- c("fastqc","general_stats","picard_AlignmentSummaryMetrics","picard_baseContent","picard_dups","picard_gcbias","picard_insertSize","picard_RnaSeqMetrics","picard_varientCalling","star")
@@ -525,7 +532,7 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   
   ## load data from patient results excel sheet ##
   patientResults <- loadRNAseqOverview()
-    patientResults <- as.data.frame(patientResults)
+  patientResults <- as.data.frame(patientResults)
   dups <- as.character(patientResults$`Biomaterial ID`[duplicated(patientResults$`Biomaterial ID`)])
   patientResults <- patientResults[!(patientResults$`Biomaterial ID` %in% dups),]
   idInBoth <- intersect(multiQCdata$`Biomaterial ID`,patientResults$`Biomaterial ID`)
@@ -568,7 +575,7 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   
   colnames(mergedData) <- gsub("\r","",colnames(mergedData))
   
-  BMlist <- as.matrix(readtext(fileList$bslijst))
+  BMlist <- as.matrix(readtext(fileList$bmlijst))
   datum.isolatie <- convertToDate(BMlist[,"Datum.isolatie"])
   dd <- cbind(as.data.frame(BMlist[,c("PMABS","PMABM","RIN")]),datum.isolatie)
   colnames(dd)[2] <- "Biomaterial ID"
@@ -578,20 +585,17 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   mergedData <- mergedData[idInBoth,]
   rownames(dd)<- dd$`Biomaterial ID`
   dd <- dd[rownames(mergedData),]
+
+  mergedData <- cbind(mergedData,dd)
   
-  mergedData2 <- cbind(mergedData,dd)
-  mergedData2$RIN <- as.numeric(as.character(mergedData2$RIN))
-  
-  mergedData2$RIN[mergedData2$RIN == 88] <- 8.8
-  
-  mergedData2$rf <- 0
-  mergedData2$rf[mergedData2$fusionGenes != "geen_relevante_fusie"] <- 1
-  mergedData2$picard_RnaSeqMetrics_CODING_BASES <- as.numeric(mergedData2$picard_RnaSeqMetrics_CODING_BASES)
-  mergedData2$picard_insertSize_MEDIAN_INSERT_SIZE <- as.numeric(mergedData2$picard_insertSize_MEDIAN_INSERT_SIZE)
-  mergedData2$fastqc_Total.Sequences <- as.numeric(mergedData2$fastqc_Total.Sequences)
-  mergedData2$general_stats_Picard..general._mqc.generalstats.picard_general.PCT_MRNA_BASES2 <- as.numeric(mergedData2$general_stats_Picard..general._mqc.generalstats.picard_general.PCT_MRNA_BASES2)
-  mergedData2$general_stats_FastQC_mqc.generalstats.fastqc.percent_duplicates2 <- as.numeric(mergedData2$general_stats_FastQC_mqc.generalstats.fastqc.percent_duplicates2)
-  mergedData2$fastqc_total_deduplicated_percentage <- as.numeric(mergedData2$fastqc_total_deduplicated_percentage)
+  mergedData$rf <- 0
+  mergedData$rf[mergedData$fusionGenes != "geen_relevante_fusie"] <- 1
+  mergedData$picard_RnaSeqMetrics_CODING_BASES <- as.numeric(mergedData$picard_RnaSeqMetrics_CODING_BASES)
+  mergedData$picard_insertSize_MEDIAN_INSERT_SIZE <- as.numeric(mergedData$picard_insertSize_MEDIAN_INSERT_SIZE)
+  mergedData$fastqc_Total.Sequences <- as.numeric(mergedData$fastqc_Total.Sequences)
+  mergedData$general_stats_Picard..general._mqc.generalstats.picard_general.PCT_MRNA_BASES2 <- as.numeric(mergedData$general_stats_Picard..general._mqc.generalstats.picard_general.PCT_MRNA_BASES2)
+  mergedData$general_stats_FastQC_mqc.generalstats.fastqc.percent_duplicates2 <- as.numeric(mergedData$general_stats_FastQC_mqc.generalstats.fastqc.percent_duplicates2)
+  mergedData$fastqc_total_deduplicated_percentage <- as.numeric(mergedData$fastqc_total_deduplicated_percentage)
   
   
   NGSlist <- read.xlsx(fileList$NGSdiagnostiek,sheet = "RNA Library prep")
@@ -603,12 +607,12 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   colnames(insertSize) <- c("Biomaterial ID","insertSize_BA","concentration_nM","volume_ul","input_ng","yield(fmol)")
   dups <- rev(duplicated(rev(insertSize$`Biomaterial ID`)))
   insertSize <- insertSize[!dups,]
-  idInBoth <- intersect(mergedData2$`Biomaterial ID`,insertSize$`Biomaterial ID`)
+  idInBoth <- intersect(mergedData$`Biomaterial ID`,insertSize$`Biomaterial ID`)
   insertSize <- insertSize[insertSize$`Biomaterial ID` %in% idInBoth,]
   rownames(insertSize) <- insertSize$`Biomaterial ID`
-  mergedData2 <- mergedData2[mergedData2$`Biomaterial ID` %in% idInBoth,]
+  mergedData <- mergedData[mergedData$`Biomaterial ID` %in% idInBoth,]
   
-  mergedData2 <- cbind(mergedData2,insertSize[rownames(mergedData2),])
+  mergedData2 <- cbind(mergedData,insertSize[rownames(mergedData),])
   mergedData2$insertSize_BA <- as.numeric(mergedData2$insertSize_BA)
   mergedData2$concentration_nM <- as.numeric(mergedData2$concentration_nM)
   
@@ -644,6 +648,8 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   BSlijst$tumorPercFinal[BSlijst$tumorPercFinal == -1] <- NA
   
   mergedData2 <- merge(mergedData2,BSlijst,by="PMABS",all.x=T)
+  mergedData2$RIN <- as.numeric(as.character(mergedData2$RIN))
+  mergedData2$RIN[mergedData2$RIN == 88] <- 8.8
   
   
   
