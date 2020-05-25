@@ -48,17 +48,37 @@ ui <- navbarPage("PMC NGS R tools",
                           ),
                           fluidRow(
                             column(4,actionButton("checkExpression", tags$b("Plot expression"), style="color: #fff; background-color: #fd8723; border-color: #ffffff")),
-                            column(4,checkboxInput("makePdf","make PDF"))
+                            column(4,checkboxInput("makePdfExpression","make PDF"))
                           ),
                           fluidRow(
                             br(),
                             br(),
-                            mainPanel(width = 12,plotOutput("plot")
+                            mainPanel(width = 12,plotOutput("plotExpression")
                             )
                           )
                  ),
-                 tags$style(HTML(" 
-        .navbar-default .navbar-brand {color: #ffffff;}
+                 tabPanel(tags$b("Mutational Signatures"),
+                          fluidRow(
+                            column(4,titlePanel(h4("Calculate Mutational Signatures")))
+                          ),
+                          fluidRow(
+                            column(5,selectInput("seqRunSignature","Choose a seq run",choices = inputChoices)),
+                            column(7,selectInput("sampleSignature","Choose a sample",choices = sampleChoices,width = "150%"))
+                          ),
+                          fluidRow(
+                            column(5,actionButton("getVcfs", tags$b("Get vcfs"))),
+                            column(3,actionButton("calculateSignature", tags$b("Calculate Signature"), style="color: #fff; background-color: #fd8723; border-color: #ffffff")),
+                            column(2,checkboxInput("VAF005","VAF >5%")),
+                            column(2,checkboxInput("makePdfSignature","make PDF"))
+                          ),
+                          fluidRow(
+                            br(),
+                            br(),
+                            mainPanel(width = 12,plotOutput("plotSignature")
+                            )
+                          )
+                 ),
+                tags$style(HTML(".navbar-default .navbar-brand {color: #ffffff;}
                                  .navbar { background-color: #fd8723;}
                                  .navbar-default .navbar-nav > li > a {color:#ffffff;}
                                  "))
@@ -136,24 +156,65 @@ server <- function(input, output, session) {
     updateSelectInput(session,"sampleExpression",choices=WTSoverview$`Biomaterial ID` )
   })
   
+  observe({
+    seqRun <- input$seqRunSignature
+    sigChoices <- list.files(paste0(baseDirWES,seqRun,"/rawData/"),pattern="vcf.gz")
+    if (length(sigChoices) == 0){
+      sigChoices <- "Click get vcfs to download vcf files"
+    }
+    updateSelectInput(session,"sampleSignature",choices=sigChoices)
+  })
+  
   observeEvent(input$checkExpression,ignoreInit = T,{
     seqRun <- input$seqRunExpression
-    sample <- input$sampleExpression
+    sampleName <- input$sampleExpression
     tumorType <- input$tumorType
     gene <- input$geneExpression
     runData <- loadRunExpressionData(folder = seqRun)
-    if(input$makePdf){
-      pdf(paste0("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)/",seqRun,"/",sample,"_",gene,"_",tumorType,".pdf"),width = 12,height = 7)
-      plotExpression(gene = gene,sample = sample,tumorType = tumorType,refData = refCohort,runData = runData)
+    if(input$makePdfExpression){
+      pdf(paste0("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)/",seqRun,"/",sampleName,"_",gene,"_",tumorType,".pdf"),width = 12,height = 7)
+      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData)
       dev.off()
     }
     #expPlot <- plotExpression(gene = gene,sample = sample,tumorType = tumorType,refData = refCohort,runData = runData)
-    output$plot <- renderPlot({
+    output$plotExpression <- renderPlot({
       #plot(runif(50),runif(50))
-      plotExpression(gene = gene,sample = sample,tumorType = tumorType,refData = refCohort,runData = runData)
+      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData)
     })
   })
-   
+  
+  observeEvent(input$getVcfs,ignoreInit = T,{
+    seqRun <- input$seqRunSignature
+    showModal(modalDialog("Downloading vcf files", footer=NULL))
+    downloadMutect2vcf(seqRun)
+    sigChoices <- list.files(paste0(baseDirWES,seqRun,"/rawData/"),pattern="vcf.gz")
+    updateSelectInput(session,"sampleSignature",choices=sigChoices)
+    removeModal()
+  })
+  
+  observeEvent(input$calculateSignature,ignoreInit = T,{
+    VAF005 <- input$VAF005
+    seqRun <- input$seqRunSignature
+    vcfFile <- input$sampleSignature
+    sampleName <- paste(strsplit(vcfFile,"_")[[1]][c(1,2)],collapse = "_")
+    showModal(modalDialog("Processing vcf file", footer=NULL))
+    mut_mat <- processVcf(folder = seqRun,vcfFile = vcfFile,VAF005 = VAF005)
+    if(input$makePdfSignature){
+      if(VAF005){
+        pdf(paste0(baseDirWES,folder,"/",sampleName,"_mutSignatures_VAF005.pdf"),width = 12,height = 7)
+      }else{
+        pdf(paste0(baseDirWES,folder,"/",sampleName,"_mutSignatures.pdf"),width = 12,height = 7)
+      }
+      getMutationalSignature(mut_mat,sample_names = sampleName,VAF005 = VAF005)
+      dev.off()
+    }
+
+    output$plotSignature <- renderPlot({
+      getMutationalSignature(mut_mat,sample_names = sampleName,VAF005 = VAF005)
+    })
+    removeModal()
+  })
+  
 }
 
 # Create Shiny app ----
