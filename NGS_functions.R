@@ -1,7 +1,6 @@
 ## to do: ##
-## implement function for reading in data links documents ##
-## integrate mutational signatures ##
-## change order metadata RNA so it fits with RNAseq overview ##
+## missing multiqc WES from multiqcfile directory ##
+## downloading missing expression data files for incomplete runs ##
 
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
@@ -182,17 +181,25 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     for ( i in 1:nrow(multiQCdataSingle)){
       tempList[[i]] <- as.vector(c(multiQCdataSingle[i,],multiQCdatapaired[grep(multiQCdataSingle$`Biomaterial ID`[i],multiQCdatapaired$`pair_Biomaterial ID pair`)[1],]))
     }
-    
+    cramFiles <- getFileList(seqRunDir,rootDir,pattern = ".cram")$targetFiles
+    names(cramFiles) <- sapply(sub("http://files.bioinf.prinsesmaximacentrum.nl/WXS/","",cramFiles), function(x) strsplit(x,"_")[[1]][1])
     multiQCdata <- do.call(rbind,tempList)
     multiQCdata <- as.data.frame(apply(multiQCdata,2,unlist),stringsAsFactors = F)
     rownames(multiQCdata) <- multiQCdata$`Biomaterial ID`
     samples <- c(multiQCdatapaired$pair_sample1,multiQCdatapaired$pair_sample2)
     if (!sum(samples %in% multiQCdata$`Biomaterial ID`) == length(samples)){
-      missingSample <- samples[!samples %in% multiQCdata$`Biomaterial ID`]
+      missingSamples <- samples[!samples %in% multiQCdata$`Biomaterial ID`]
+      missingSampleWESoverview <- loadWESOverview(samples = missingSamples)
       mostRecentQC <- list.files(paste(rootDir,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
       mostRecentQC <- mostRecentQC[length(mostRecentQC)]
       qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
-      multiQCdata <- rbind(multiQCdata,qcdataAll[qcdataAll$`Biomaterial ID` == missingSample,colnames(multiQCdata)])
+      for( i in 1:length(missingSamples)){
+        multiQCdata <- rbind(multiQCdata,qcdataAll[qcdataAll$`Biomaterial ID` == missingSamples[i],colnames(multiQCdata)])
+        missingCramFiles <- getFileList(seqRunDir = missingSampleWESoverview$seqRunID[missingSampleWESoverview$`Biomaterial ID` == missingSamples[i]][1],rootDir = rootDir,pattern = ".cram")$targetFiles
+        names(missingCramFiles) <- sapply(sub("http://files.bioinf.prinsesmaximacentrum.nl/WXS/","",missingCramFiles), function(x) strsplit(x,"_")[[1]][1])
+        cramFiles <- c(cramFiles,missingCramFiles[missingSamples[i]])
+      }
+      
       
     }
 
@@ -241,16 +248,16 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     colnames(multiQCdata)[ncol(multiQCdata)] <- "tumorPerc"
     multiQCdata$tumorPerc <- as.character(multiQCdata$tumorPerc)
     multiQCdata$uniqueReads <- round(as.numeric(multiQCdata$fastqc_Total.Sequences) * as.numeric(multiQCdata$fastqc_total_deduplicated_percentage) / 100000000,0)
-    
     itherList <- as.data.frame(read.xlsx(fileList$ither),stringsAsFactors=F)
     itherList <- itherList[!is.na(itherList$HIX),]
     itherList$PMABS.tumor[is.na(itherList$PMABS.tumor)] <- "unknown"
-    metaData <- as.data.frame(matrix(nrow=nrow(multiQCdatapaired),ncol=17))
-    colnames(metaData) <- c("Skion ID","HiX Nr","PMABS tumor","PMABM tumor","PMABS normal","PMABM normal","T-nummer","Vraagstelling","Tumor perc","UniqueReadsTumor(10^6)","UniqueReadsNormal(10^6)","MeanCoverageTumor","MeanCoverageNormal","novelVariants","ContaminationTumor","ContaminationNormal","TumorNormalCheck")
+    metaData <- as.data.frame(matrix(nrow=nrow(multiQCdatapaired),ncol=19))
+    colnames(metaData) <- c("Skion ID","HiX Nr","PMABS tumor","PMABM tumor","PMABS normal","PMABM normal","T-nummer","Vraagstelling","Tumor perc","UniqueReadsTumor(10^6)","UniqueReadsNormal(10^6)","MeanCoverageTumor","MeanCoverageNormal","novelVariants","ContaminationTumor","ContaminationNormal","TumorNormalCheck","cramTumor","cramNormal")
     for ( i in 1:nrow(metaData)){
       metaData[i,c(1,2,3,4,7,9,10,12,15,17)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample1[i],c("PMCBS","HIX","PMABS","PMABM","PA-nummer","tumorPerc","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX","pair_tumor-normal_comparison_Ratio.as.expected.")]
       metaData[i,c(5,6,11,13,16)] <- multiQCdata[multiQCdata$`Biomaterial ID` == multiQCdatapaired$pair_sample2[i],c("PMABS","PMABM","uniqueReads","picard_HsMetrics_MEAN_TARGET_COVERAGE","verifybamid_FREEMIX")]
       metaData[i,14] <- multiQCdatapaired[i,"pair_gatk_varianteval_novel_sites"]
+      metaData[i,c(18,19)] <- cramFiles[c(multiQCdatapaired$pair_sample1[i],multiQCdatapaired$pair_sample2[i])]
       if(metaData[i,"PMABS tumor"] %in% itherList$PMABS.tumor){
         metaData[i,"Vraagstelling"] <- paste("iTHER",itherList$Ither.nummer[itherList$PMABS.tumor == metaData[i,"PMABS tumor"]])
       }else{
@@ -336,9 +343,10 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     dd <- dd[!is.na(dd$`Biomaterial ID`),]
     dd <- dd[dd$`Biomaterial ID` %in% samples,]
     rownames(dd) <- dd$`Biomaterial ID`
-    
-    libData <- cbind(libData,dd[rownames(libData),],as.numeric(multiQCdata[rownames(libData),"Total.Sequences"]) * as.numeric(multiQCdata[rownames(libData),"total_deduplicated_percentage"])/100,as.numeric(multiQCdata[rownames(libData),"Total.Sequences"]))
-    colnames(libData)[c((ncol(libData)-1):ncol(libData))] <- c("unique_reads","total_reads")
+    cramFiles <- getFileList(seqRunDir,baseDirWTS,pattern = "RNA-Seq.cram")$targetFiles
+    names(cramFiles) <- sapply(sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",cramFiles),function(x) strsplit(x,"_")[[1]][1])
+    libData <- cbind(libData,dd[rownames(libData),],as.numeric(multiQCdata[rownames(libData),"Total.Sequences"]) * as.numeric(multiQCdata[rownames(libData),"total_deduplicated_percentage"])/100,as.numeric(multiQCdata[rownames(libData),"Total.Sequences"]),cramFiles[rownames(libData)])
+    colnames(libData)[c((ncol(libData)-2):ncol(libData))] <- c("unique_reads","total_reads","cramFile")
     
     blackList <- read.csv(fileList$fusionBlacklist,sep="\t",stringsAsFactors = F)
     
@@ -374,7 +382,7 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
       if (nrow(curFileData) > 1){
         for ( j in 2:nrow(curFileData)){
           for ( k in 1:ncol(curFileData)){
-            if (nchar(curFileData[j,k]) > 32766){
+            if (!is.na(curFileData[j,k]) & nchar(curFileData[j,k]) > 32766){
               curFileData[j,k] <- "Too large for excel to display, check tsv file"
             }
           }
@@ -427,7 +435,8 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     samples$yield <- round(metaData[samples$PMABM,"yield"],0)
     samples$uniqueReads <- round(metaData[samples$PMABM,"unique_reads"]/1000000,0)
     samples$input <- metaData[samples$PMABM,"input_ng"]
-    colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","Vraagstelling","TumorPercentage","RIN","yield(fmol)","uniqueReads(10^6)","input(ng)")
+    samples$cramFiles <- as.character(metaData[samples$PMABM,"cramFile"])
+    colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","Vraagstelling","TumorPercentage","RIN","yield(fmol)","uniqueReads(10^6)","input(ng)","cramFile")
     samples$RIN <- round(as.numeric(as.character(samples$RIN)),1)
     otherSamples <- samplesDone[!(samplesDone %in% BMlist$PMABM)]
     if(length(otherSamples) > 0){
@@ -439,7 +448,7 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
       NGSlist <- NGSlist[!is.na(NGSlist$PMABM),]
       for ( i in 1:nrow(otherMatrix)){
         otherMatrix[i,c("SKION ID","HIX Nr","BioSource ID","Materiaal","Weefsel#","RIN","input(ng)")] <- NGSlist[NGSlist$PMABM == otherMatrix$`Biomaterial ID`[i],c("PMCBS","HIX","PMABS","Type.BS","PA-nummer","RIN","totaal.in.oprep")]
-        otherMatrix[i,c("yield(fmol)","uniqueReads(10^6)")] <- c(round(metaData[otherMatrix$`Biomaterial ID`[i],"yield"],0),round(metaData[otherMatrix$`Biomaterial ID`[i],"unique_reads"]/1000000,0))
+        otherMatrix[i,c("yield(fmol)","uniqueReads(10^6)","cramFile")] <- c(round(metaData[otherMatrix$`Biomaterial ID`[i],"yield"],0),round(metaData[otherMatrix$`Biomaterial ID`[i],"unique_reads"]/1000000,0),cramFiles[otherMatrix$`Biomaterial ID`[i]])
       }
       samples <- rbind(samples,otherMatrix)
     }
