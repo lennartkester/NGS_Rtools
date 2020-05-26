@@ -421,13 +421,13 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
         vraagStelling[i] <- paste("iTHER",itherList$Ither.nummer[itherList$PMABS.tumor == samples$PMABS[i]])
       }
     }
-    samples <- as.data.frame(cbind(samples[,c("PMCBS","HIX","PMABS","PMABM","Type.BS","PA-nummer")],vraagStelling,samples[,c("RIN")],BSlijst[samples$PMABS,"Tumor.%"]),stringsAsFactors=F)
+    samples <- as.data.frame(cbind(samples[,c("PMCBS","HIX","PMABS","PMABM","Type.BS","PA-nummer")],vraagStelling,BSlijst[samples$PMABS,"Tumor.%"],samples[,c("RIN")]),stringsAsFactors=F)
     
     metaData <- do.call(rbind,metaList)
     samples$yield <- round(metaData[samples$PMABM,"yield"],0)
     samples$uniqueReads <- round(metaData[samples$PMABM,"unique_reads"]/1000000,0)
     samples$input <- metaData[samples$PMABM,"input_ng"]
-    colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","Vraagstelling","RIN","TumorPercentage","yield(fmol)","uniqueReads(10^6)","input(ng)")
+    colnames(samples) <- c("SKION ID","HIX Nr","BioSource ID","Biomaterial ID","Materiaal","Weefsel#","Vraagstelling","TumorPercentage","RIN","yield(fmol)","uniqueReads(10^6)","input(ng)")
     samples$RIN <- round(as.numeric(as.character(samples$RIN)),1)
     otherSamples <- samplesDone[!(samplesDone %in% BMlist$PMABM)]
     if(length(otherSamples) > 0){
