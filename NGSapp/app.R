@@ -1,7 +1,7 @@
 
 library(shiny)
 
-source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools/NGS_functions.R")
+source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/NGS_functions.R")
 
 inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
@@ -201,9 +201,9 @@ server <- function(input, output, session) {
     mut_mat <- processVcf(folder = seqRun,vcfFile = vcfFile,VAF005 = VAF005)
     if(input$makePdfSignature){
       if(VAF005){
-        pdf(paste0(baseDirWES,folder,"/",sampleName,"_mutSignatures_VAF005.pdf"),width = 12,height = 7)
+        pdf(paste0(baseDirWES,seqRun,"/",sampleName,"_mutSignatures_VAF005.pdf"),width = 12,height = 7)
       }else{
-        pdf(paste0(baseDirWES,folder,"/",sampleName,"_mutSignatures.pdf"),width = 12,height = 7)
+        pdf(paste0(baseDirWES,seqRun,"/",sampleName,"_mutSignatures.pdf"),width = 12,height = 7)
       }
       getMutationalSignature(mut_mat,sample_names = sampleName,VAF005 = VAF005)
       dev.off()
