@@ -1,6 +1,8 @@
 ## to do: ##
 ## missing multiqc WES from multiqcfile directory ##
 ## downloading missing expression data files for incomplete runs ##
+## remove non numeric characters from metadata column ##
+## add status to WES qc overview again ##
 
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
@@ -843,7 +845,7 @@ generateReport <- function(folder=folder, type=type){
     samples <- unique(samples)
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
     mostRecentQC <- list.files(paste(baseDirWES,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
-    mostRecentQC <- mostRecentQC[length(mostRecentQC)]
+    mostRecentQC <- mostRecentQC[length(mostRecentQC)-1]
     qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
     wesOverview <- loadWESOverview(folder=folder,samples=samples)
     for ( sample in samples ){
@@ -881,7 +883,9 @@ qcBarplotWTS <- function(dataRun,dataAll,sample,variable){
   title(xlab=variable,line=2.5,cex.lab=1.2)
   title(ylab="Frequency",line=2.5,cex.lab=1.2)
   box()
-  abline(v=(dataRun[dataRun$`Biomaterial.ID` == sample,variable]/max(br)*max(a)),col='red',lwd=2)
+  if(is.numeric(dataRun[dataRun$`Biomaterial.ID` == sample,variable])){
+    abline(v=(dataRun[dataRun$`Biomaterial.ID` == sample,variable]/max(br)*max(a)),col='red',lwd=2)
+  }
   if(variable == "uniqueReads(10^6)"){
     lines(x=c(a["40",1],a["40",1]),y = c(0,0.85*max(binnedData)),lty=2)
     text(x = a["40",1],y = 0.95*max(binnedData),labels = "QC cut-off")
@@ -992,13 +996,13 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
                  itherNr,
                  t(rnaSeqOverview[sample,c(13)]),
                  t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(8:12)]))
-    rownames(tab) <- c("Seq Run ID","SKION ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","RIN","Tumor Cell %","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
+    rownames(tab) <- c("Seq Run ID","SKION ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","Tumor Cell %","RIN","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
   }else{
     tab <- rbind(folder,
                  t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(1:7)]),
                  t(rnaSeqOverview[sample,c(13)]),
                  t(qcdataRun[qcdataRun$Biomaterial.ID == sample,c(8:12)]))
-    rownames(tab) <- c("Seq Run ID","SKION ID","HIX ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","RIN","Tumor Cell %","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
+    rownames(tab) <- c("Seq Run ID","SKION ID","HIX ID","Biosource ID","Biomaterial ID","Material type","T-number","Vraagstelling","Diagnosis","Tumor Cell %","RIN","Yield (fmol)","Unique Reads (10^6)","Input amount (ng)")
     
   }
   tab <- as.table(tab)
@@ -1418,7 +1422,7 @@ makeWTSoverviewSlide <- function(folder){
 
 makeWESoverviewSlide <- function(folder){
   mostRecentQC <- list.files(paste(baseDirWES,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
-  mostRecentQC <- mostRecentQC[length(mostRecentQC)]
+  mostRecentQC <- mostRecentQC[length(mostRecentQC)-1]
   qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
   qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
   qcdataRun <- qcdataRun[grep("PMOBM|PMRBM",qcdataRun$PMABM.tumor,invert = T),]
