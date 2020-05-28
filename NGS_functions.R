@@ -1,8 +1,8 @@
 ## to do: ##
-## missing multiqc WES from multiqcfile directory ##
 ## downloading missing expression data files for incomplete runs ##
 ## remove non numeric characters from metadata column ##
 ## add status to WES qc overview again ##
+## move tumor type and hix to top of table and bold/color ##
 
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
@@ -54,6 +54,7 @@ getFileList <- function(seqRunDir,rootDir,pattern){
     perLine <- strsplit(filetext$text,"\n")[[1]]
     targetFiles <- perLine[grep(pattern,perLine)]
     targetFiles <- paste0("http://",sapply(targetFiles, function(x) strsplit(strsplit(x,"http://")[[1]][2],pattern)[[1]][1]),pattern)
+    targetFiles <- targetFiles[order(targetFiles)]
     
     return(list("targetFiles"=unique(targetFiles),"perLine"=perLine))
   }  
@@ -574,8 +575,8 @@ mergeReports <- function(folder=folder, type=type){
       stop("Specified folder does not exists in WTS (RNA-Seq) folder")
     }
     WTSreports <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "WTSreport.pdf",full.names = T)
-    WTSreportsIther <- WTSreports[grep("ITHER",WTSreports)]
-    WTSreports <- WTSreports[grep("ITHER",WTSreports,invert = T)]
+    WTSreportsIther <- WTSreports[grepl("ITHER",WTSreports)]
+    WTSreports <- WTSreports[grepl("ITHER",WTSreports,invert = T)]
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWTS,folder,"metaData_LKR.xlsx",sep="/")))
     qcdataRun <- qcdataRun[grep("PMRBM|PMOBM",qcdataRun$Biomaterial.ID,invert=T),]
     samples <- unique(sapply(list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "WTSreport.pdf",full.names = F),function(x) strsplit(x = x,"_")[[1]][1]))
@@ -684,7 +685,7 @@ mergeReports <- function(folder=folder, type=type){
       }
     }
     reportFiles <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
-    reportFiles <- reportFiles[grep("ITHER",reportFiles,invert = T)]
+    reportFiles <- reportFiles[grepl("ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWTS,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
     pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWTS,folder,"/",folder,"_runReport.pdf"))
   }
@@ -693,8 +694,8 @@ mergeReports <- function(folder=folder, type=type){
       stop("Specified folder does not exists in WES folder")
     }
     WESreports <- list.files(path=paste(baseDirWES,folder,sep=""),pattern = "WESreport.pdf",full.names = T)
-    WESreportsIther <- WESreports[grep("ITHER",WESreports)]
-    WESreports <- WESreports[grep("ITHER",WESreports,invert = T)]
+    WESreportsIther <- WESreports[grepl("ITHER",WESreports)]
+    WESreports <- WESreports[grepl("ITHER",WESreports,invert = T)]
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
     samples <- unique(sapply(list.files(path=paste(baseDirWES,folder,sep=""),pattern = "WESreport.pdf",full.names = F),function(x) strsplit(x = x,"_")[[1]][1]))
     rownames(qcdataRun) <- qcdataRun$PMABM.tumor
@@ -799,7 +800,7 @@ mergeReports <- function(folder=folder, type=type){
       }
     }
     reportFiles <- list.files(path=paste(baseDirWES,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
-    reportFiles <- reportFiles[grep("ITHER",reportFiles,invert = T)]
+    reportFiles <- reportFiles[grepl("ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
     pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWES,folder,"/",folder,"_runReport.pdf"))
   }
@@ -883,8 +884,8 @@ qcBarplotWTS <- function(dataRun,dataAll,sample,variable){
   title(xlab=variable,line=2.5,cex.lab=1.2)
   title(ylab="Frequency",line=2.5,cex.lab=1.2)
   box()
-  if(is.numeric(dataRun[dataRun$`Biomaterial.ID` == sample,variable])){
-    abline(v=(dataRun[dataRun$`Biomaterial.ID` == sample,variable]/max(br)*max(a)),col='red',lwd=2)
+  if(!is.na(dataRun[dataRun$`Biomaterial.ID` == sample,variable])){
+    abline(v=(as.numeric(dataRun[dataRun$`Biomaterial.ID` == sample,variable])/max(br)*max(a)),col='red',lwd=2)
   }
   if(variable == "uniqueReads(10^6)"){
     lines(x=c(a["40",1],a["40",1]),y = c(0,0.85*max(binnedData)),lty=2)
@@ -1276,17 +1277,25 @@ loadRefData <- function(countSet = "20200424_PMCdiag_RNAseq_counts_60357.csv"){
 }
 
 checkExpressionData <- function(folder){
-  expressionFile <- paste0(baseDirWTS,folder,"/expressionData/",folder,"_counts.csv")
-  if(!file.exists(expressionFile)){
-    #  print("Downloading expression data")
+  expressionFiles <- getFileList(folder,rootDir = baseDirWTS,pattern = "RNA-Seq.gene_id.exon.counts.txt")$targetFiles
+  expressionFiles2 <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",expressionFiles)
+  if (sum(expressionFiles2 %in% list.files(paste0(baseDirWTS,folder,"/expressionData/"),pattern = "_RNA-Seq.gene_id.exon.counts",full.names = F)) > 0){
     counts <- downloadExpressionData(folder)
+    expressionFile <- paste0(baseDirWTS,folder,"/expressionData/",folder,"_counts.csv")
     write.table(counts,expressionFile,sep="\t")
   }
+#  if(!file.exists(expressionFile)){
+    #  print("Downloading expression data")
+#    counts <- downloadExpressionData(folder)
+#    write.table(counts,expressionFile,sep="\t")
+#  }
 }
 
 loadRunExpressionData <- function(folder){
   expressionFile <- paste0(baseDirWTS,folder,"/expressionData/",folder,"_counts.csv")
-  if(!file.exists(expressionFile)){
+  expressionFiles <- getFileList(folder,rootDir = baseDirWTS,pattern = "RNA-Seq.gene_id.exon.counts.txt")$targetFiles
+  expressionFiles2 <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",expressionFiles)
+  if (sum(expressionFiles2 %in% list.files(paste0(baseDirWTS,folder,"/expressionData/"),pattern = "_RNA-Seq.gene_id.exon.counts",full.names = F)) > 0){
     message("Expression data not available yet, start downloading...")
     counts <- downloadExpressionData(folder)
     write.table(counts,expressionFile,sep="\t")
