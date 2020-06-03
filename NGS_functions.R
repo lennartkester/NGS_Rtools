@@ -3,6 +3,8 @@
 ## remove non numeric characters from metadata column ##
 ## add status to WES qc overview again ##
 ## move tumor type and hix to top of table and bold/color ##
+## check if fusion excel file already exists based on PMABM id and not on file name ##
+
 
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
@@ -1295,7 +1297,12 @@ loadRunExpressionData <- function(folder){
   expressionFile <- paste0(baseDirWTS,folder,"/expressionData/",folder,"_counts.csv")
   expressionFiles <- getFileList(folder,rootDir = baseDirWTS,pattern = "RNA-Seq.gene_id.exon.counts.txt")$targetFiles
   expressionFiles2 <- sub("http://files.bioinf.prinsesmaximacentrum.nl/RNA-Seq/","",expressionFiles)
-  if (sum(expressionFiles2 %in% list.files(paste0(baseDirWTS,folder,"/expressionData/"),pattern = "_RNA-Seq.gene_id.exon.counts",full.names = F)) > 0){
+  if(!file.exists(expressionFile)){
+    message("Expression data not available yet, start downloading...")
+    counts <- downloadExpressionData(folder)
+    write.table(counts,expressionFile,sep="\t")
+  }
+  if (sum(expressionFiles2 %in% list.files(paste0(baseDirWTS,folder,"/expressionData/"),pattern = "_RNA-Seq.gene_id.exon.counts",full.names = F)) < length(expressionFiles2)){
     message("Expression data not available yet, start downloading...")
     counts <- downloadExpressionData(folder)
     write.table(counts,expressionFile,sep="\t")
