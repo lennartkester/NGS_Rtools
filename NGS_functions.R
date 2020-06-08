@@ -1,6 +1,5 @@
 ## to do: ##
 ## add status to WES qc overview again ##
-## check if fusion excel file already exists based on PMABM id and not on file name ##
 
 
 
@@ -410,7 +409,9 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
       totalMatrix[c(1:length(topHeader)),1] <- topHeader
       totalMatrix[c((length(topHeader)+2):(length(topHeader)+1+length(curFileHeader))),1] <- curFileHeader
       totalMatrix[c((length(topHeader)+2+length(curFileHeader)):nrow(totalMatrix)),] <- as.matrix(curFileData)
-      tryCatch(write.xlsx(totalMatrix,paste0(baseDirWTS,seqRunDir,"/",sampleName,"_LKR.xlsx"),colNames = F,overwrite=F),error = function(e) NULL ) 
+      if(identical(grep(sampleName,list.files(paste0(baseDirWTS,seqRunDir),pattern = ".xlsx")),integer(0))){
+        tryCatch(write.xlsx(totalMatrix,paste0(baseDirWTS,seqRunDir,"/",sampleName,"_LKR.xlsx"),colNames = F,overwrite=F),error = function(e) NULL ) 
+      }
       samplesDone <- c(samplesDone,sampleName)
       #print(paste("Downloaded sample:",sampleName,"and generated excel file"))
     }
@@ -847,7 +848,7 @@ generateReport <- function(folder=folder, type=type){
     samples <- unique(samples)
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
     mostRecentQC <- list.files(paste(baseDirWES,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
-    mostRecentQC <- mostRecentQC[length(mostRecentQC)-1]
+    mostRecentQC <- mostRecentQC[length(mostRecentQC)]
     qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
     wesOverview <- loadWESOverview(folder=folder,samples=samples)
     for ( sample in samples ){
@@ -907,6 +908,7 @@ qcBarplotWES <- function(dataRun,dataAll,sample,variable){
     data <- as.data.frame(cbind(as.numeric(dataAll[,"pair_gatk_varianteval_novel_sites"]),dataAll$Status))
     data <- data[data[,2] == "Tumor",]
     data[,1] <- as.numeric(as.character(data[,1]))
+    data[data[,1] > 8000,1] <- 8000
   }else if(variable == "UniqueReads"){
     data <- as.data.frame(cbind(round(dataAll$fastqc_Total.Sequences * dataAll$fastqc_total_deduplicated_percentage / 100000000,0),dataAll$Status))
     data[,1] <- as.numeric(as.character(data[,1]))
@@ -916,6 +918,7 @@ qcBarplotWES <- function(dataRun,dataAll,sample,variable){
   }else if(variable == "Contamination"){
     data <- as.data.frame(cbind(round(dataAll$verifybamid_FREEMIX,4),dataAll$Status))
     data[,1] <- as.numeric(as.character(data[,1]))
+    data[data[,1] > 0.08,1] <- 0.08
   }
   
   data <- data[apply(data,1,function(x) sum(is.na(x))==0),]
@@ -958,9 +961,11 @@ qcBarplotWES <- function(dataRun,dataAll,sample,variable){
     legend("topright",pch=15,col=c("black","lightgrey","red","orange"),legend=c("Tumor (historic)","Normal (historic)","Tumor","Normal"),bty='n')
   }
   if (variable == "novelVariants"){
+    dataRun[as.numeric(dataRun[,"novelVariants"]) > 8000,"novelVariants"] <- 8000
     abline(v=(as.numeric(dataRun[dataRun$PMABM.tumor == sample,"novelVariants"])/max(br)*max(b)),col='red',lwd=2)  
   }
   if (variable == "Contamination"){
+    dataRun[as.numeric(dataRun[,"ContaminationTumor"]) > 0.08,"ContaminationTumor"]<- 0.08
     abline(v=(as.numeric(dataRun[dataRun$PMABM.tumor == sample,"ContaminationTumor"])/max(br)*max(b)),col='red',lwd=2)  
     abline(v=(as.numeric(dataRun[dataRun$PMABM.tumor == sample,"ContaminationNormal"])/max(br)*max(b)),col='orange',lwd=2)  
     legend("topright",pch=15,col=c("black","lightgrey","red","orange"),legend=c("Tumor (historic)","Normal (historic)","Tumor","Normal"),bty='n')
@@ -1438,7 +1443,7 @@ makeWTSoverviewSlide <- function(folder){
 
 makeWESoverviewSlide <- function(folder){
   mostRecentQC <- list.files(paste(baseDirWES,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
-  mostRecentQC <- mostRecentQC[length(mostRecentQC)-1]
+  mostRecentQC <- mostRecentQC[length(mostRecentQC)]
   qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
   qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
   qcdataRun <- qcdataRun[grep("PMOBM|PMRBM",qcdataRun$PMABM.tumor,invert = T),]
