@@ -1,7 +1,6 @@
 ## to do: ##
-## add status to WES qc overview again ##
-
-
+## add ref cohort version to RNAseq expression plot ##
+## add WTS/WES to name run overview file ##
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
@@ -1166,7 +1165,7 @@ printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverv
 
 
 
-plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,refData=refCohort,runData=runCohort,pdf=F){
+plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,folder=NULL,refData=refCohort,runData=runCohort,pdf=F,showAll=T){
   if(!gene %in% rownames(refData$counts)){
     stop(paste(gene,"does not exists in refData, are you sure spelling is correct?"))
   }
@@ -1196,39 +1195,42 @@ plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,refData=refCohor
     dataGeneOrdered <- dataGene[order(dataGene)]
     metaData <- refData$metaData[names(dataGeneOrdered),]
   }
-  if (!is.null(tumorType)){
-    if (pdf){
-      pdf(paste0(baseDirWTS,folder,"/",sample,"_",gene,"_",tumorType,".pdf"), width = 12, height = 7, bg="white")
-    }
-    layout(mat=matrix(ncol=2,nrow=1,data=c(1,2)))
-    par(mar=c(5,4,2,0.5))
-    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='grey',xlab=paste(gene,"- Counts per million"),ylab="Samples - all tumor types",main=paste(gene,"- All tumor types"))
+  if (showAll){
+#    layout(mat=matrix(ncol=2,nrow=2,data=c(1,2,3,3),byrow = T),heights = c(7,1))
+    par(mar=c(5,10,2,10))
+    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='grey',xlab=paste(gene,"- Counts per million"),ylab="Samples - all tumor types",main=paste(gene,"- All tumor types"),cex=2)
     tumorTypeSamples <- rownames(metaData)[metaData$`Tumor type simple` == tumorType]
-    points(dataGeneOrdered[tumorTypeSamples],which(names(dataGeneOrdered) %in% tumorTypeSamples),pch=20)
-    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=2)
+    points(dataGeneOrdered[tumorTypeSamples],which(names(dataGeneOrdered) %in% tumorTypeSamples),pch=20,cex=2)
+    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=3)
+    legend("bottomright",legend = c(tumorType,sample),pch=20,col=c('black','red'),bty='n')
+  }else{
+    par(mar=c(5,10,2,10))
+    tumorTypeSamples <- rownames(metaData)[metaData$`Tumor type simple` == tumorType]
+    dataGeneOrdered <- dataGeneOrdered[names(dataGeneOrdered) %in% c(tumorTypeSamples,sample)]
+    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='black',xlab=paste(gene,"- Counts per million"),ylab=paste("Samples -",tumorType),main=paste(gene,"-",tumorType),cex=2)
+    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=3)
+    legend("bottomright",legend = sample,pch=20,col='red',bty='n')
+  }
+  if (pdf){
+    pdf(paste0(baseDirWTS,folder,"/",sample,"_",gene,"_",tumorType,".pdf"), width = 12, height = 7, bg="white")
+    layout(mat=matrix(ncol=2,nrow=2,data=c(1,2,3,3),byrow = T),heights = c(7,1))
+    par(mar=c(5,4,2,0.5))
+    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='grey',xlab=paste(gene,"- Counts per million"),ylab="Samples - all tumor types",main=paste(gene,"- All tumor types"),cex=2)
+    tumorTypeSamples <- rownames(metaData)[metaData$`Tumor type simple` == tumorType]
+    points(dataGeneOrdered[tumorTypeSamples],which(names(dataGeneOrdered) %in% tumorTypeSamples),pch=20,cex=2)
+    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=3)
     legend("bottomright",legend = c(tumorType,sample),pch=20,col=c('black','red'),bty='n')
     
     dataGeneOrdered <- dataGeneOrdered[names(dataGeneOrdered) %in% c(tumorTypeSamples,sample)]
-    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='black',xlab=paste(gene,"- Counts per million"),ylab=paste("Samples -",tumorType),main=paste(gene,"-",tumorType))
-    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=2)
+    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='black',xlab=paste(gene,"- Counts per million"),ylab=paste("Samples -",tumorType),main=paste(gene,"-",tumorType),cex=2)
+    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=3)
     legend("bottomright",legend = sample,pch=20,col='red',bty='n')
-    if (pdf){
-      dev.off()
-    }else{
-      par(mar=c(5.1,4.1,2.1,2.1))
-    }
+    par(mar=c(0,4,0,0))
+    plot(0,0,cex=0,xlim=c(0,1),ylim=c(0,1),axes=F,ylab="",xlab="")
+    text(x = 0.5,y = 0.5,labels = paste("Reference cohort version:",refData$version))
+    dev.off()
   }
-  if (is.null(tumorType)){
-    if (pdf){
-      pdf(paste0(baseDirWTS,folder,"/",sample,"_",gene,".pdf"), width = 12, height = 7, bg="white")
-    }
-    plot(dataGeneOrdered,c(1:length(dataGeneOrdered)),pch=20,col='grey',xlab=paste(gene,"- Counts per million"),ylab="Samples - all tumor types",main=paste(gene,"- All tumor types"))
-    points(dataGeneOrdered[sample],which(names(dataGeneOrdered) == sample),col='red',pch=20,cex=2)
-    legend("bottomright",legend = c(sample),pch=20,col=c('red'),bty='n')
-    if (pdf){
-      dev.off()
-    }
-  }
+  
 }
 
 
@@ -1275,10 +1277,10 @@ loadRefData <- function(countSet = "20200424_PMCdiag_RNAseq_counts_60357.csv"){
     date <- gsub("-","",Sys.Date())
     tumorFusion <- tumorFusion[!is.na(tumorFusion$`Tumor type simple`),]
     countDataDedup <- countDataDedup[,rownames(tumorFusion)]
-    saveRDS(list("counts" = countDataDedup,"metaData"=tumorFusion),paste0(baseDir,date,"_geneExpressionRefData.rds"))
+    saveRDS(list("counts" = countDataDedup,"metaData"=tumorFusion,"version"=countSet),paste0(baseDir,date,"_geneExpressionRefData.rds"))
     
     countDataDedupNorm <- apply(countDataDedup,2,function(x) (x/mean(x))*1000000)
-    return(list("counts" = countDataDedupNorm,"metaData"=tumorFusion))
+    return(list("counts" = countDataDedupNorm,"metaData"=tumorFusion,"version"=countSet))
   }
 }
 
