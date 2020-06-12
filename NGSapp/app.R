@@ -7,7 +7,7 @@ inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
 tumorChoices <- unique(refCohort$metaData$`Tumor type simple`)
 tumorChoices <- c("NULL",tumorChoices[order(tumorChoices)])
-
+geneValsAll <- geneValsType <- NULL
 sampleChoices <- "First select seq run"
 
 # Define UI for dataset viewer app ----
@@ -37,6 +37,7 @@ ui <- navbarPage("PMC NGS R tools",
                           )
                  ),
                  tabPanel(tags$b("Check expression"),
+                          
                           fluidRow(
                             column(4,titlePanel(h4("Check expression data")))
                           ),
@@ -51,11 +52,49 @@ ui <- navbarPage("PMC NGS R tools",
                             column(4,checkboxInput("makePdfExpression","make PDF"))
                           ),
                           fluidRow(
+                            tags$head(tags$style('#my_tooltip1 {background-color: rgba(255,255,255,0.8);position: absolute;width: 600px;z-index: 100;}')),
+                            tags$script('$(document).ready(function(){
+                                        // id of the plot
+                                        $("#plotExpression1").mousemove(function(e){ // ID of uiOutput
+                                        $("#my_tooltip1").show();
+                                        $("#my_tooltip1").css({
+                                        top: (e.pageY - 250) + "px",
+                                        left: (e.pageX - 250) + "px"
+                                        });
+                                        });
+                                        });
+                                        '),
+
                             br(),
                             br(),
-                            mainPanel(width = 12,plotOutput("plotExpression")
+                            mainPanel(
+                              width = 12,
+                              plotOutput("plotExpression1",hover = hoverOpts(id = "plot_hover1", delay = 0)),
+                              uiOutput("my_tooltip1")
+                              )
+                          ),
+                           fluidRow(
+                            tags$head(tags$style('#my_tooltip2 {background-color: rgba(255,255,255,0.8);position: absolute;width: 600px;z-index: 100;}')),
+                            tags$script('$(document).ready(function(){
+                                        // id of the plot
+                                        $("#plotExpression2").mousemove(function(e){ // ID of uiOutput
+                                        $("#my_tooltip2").show();
+                                        $("#my_tooltip2").css({
+                                        top: (e.pageY - 700) + "px",
+                                        left: (e.pageX - 250) + "px"
+                                        });
+                                        });
+                                        });
+                                        '),
+
+                            br(),
+                            mainPanel(
+                              width = 12,
+                              plotOutput("plotExpression2",hover = hoverOpts(id = "plot_hover2", delay = 0)),
+                              uiOutput("my_tooltip2")
                             )
                           )
+                          
                  ),
                  tabPanel(tags$b("Mutational Signatures"),
                           fluidRow(
@@ -172,15 +211,69 @@ server <- function(input, output, session) {
     gene <- input$geneExpression
     runData <- loadRunExpressionData(folder = seqRun)
     if(input$makePdfExpression){
-      pdf(paste0("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)/",seqRun,"/",sampleName,"_",gene,"_",tumorType,".pdf"),width = 12,height = 7)
-      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData)
-      dev.off()
+#      pdf(paste0("G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)/",seqRun,"/",sampleName,"_",gene,"_",tumorType,".pdf"),width = 12,height = 7)
+      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData,pdf=T,folder=seqRun)
+#      dev.off()
     }
     #expPlot <- plotExpression(gene = gene,sample = sample,tumorType = tumorType,refData = refCohort,runData = runData)
-    output$plotExpression <- renderPlot({
-      #plot(runif(50),runif(50))
-      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData)
+    output$plotExpression1 <- renderPlot({
+      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData,showAll=F)
     })
+    output$plotExpression2 <- renderPlot({
+      plotExpression(gene = gene,sample = sampleName,tumorType = tumorType,refData = refCohort,runData = runData,showAll=T)
+    })
+    geneValsAll <- cbind(refCohort$metaData,refCohort$counts[gene,])
+    colnames(geneValsAll)[ncol(geneValsAll)] <- "gene"
+    geneValsAll <- geneValsAll[order(geneValsAll$gene),]
+    geneValsAll$order <- c(1:nrow(geneValsAll))
+    geneValsAll$PMABM <- rownames(geneValsAll)
+    geneValsAll <<- geneValsAll
+    geneValsType <- cbind(refCohort$metaData,refCohort$counts[gene,])
+    geneValsType <- geneValsAll[geneValsAll$`Tumor type simple`==tumorType,]
+    geneValsType$order <- c(1:nrow(geneValsType))
+    geneValsType <<- geneValsType
+  })
+  
+  output$my_tooltip2 <- renderUI({
+    hover <- input$plot_hover2 
+    y <- nearPoints(geneValsAll, input$plot_hover2, xvar = "gene", yvar = "order",threshold = 10)
+    req(nrow(y) != 0)
+    #verbatimTextOutput("vals")
+    tableOutput("vals2")
+  })
+  
+  output$my_tooltip1 <- renderUI({
+    hover <- input$plot_hover1 
+    y <- nearPoints(geneValsType, input$plot_hover1, xvar = "gene", yvar = "order",threshold=10)
+    req(nrow(y) != 0)
+    #verbatimTextOutput("vals")
+    tableOutput("vals1")
+  })
+  
+  output$vals2 <- renderTable({
+    hover <- input$plot_hover2 
+    y <- nearPoints(geneValsAll, input$plot_hover2, xvar = "gene", yvar = "order",threshold=10)
+    # y <- nearPoints(data(), input$plot_hover)["wt"]
+    req(nrow(y) != 0)
+    # y is a data frame and you can freely edit content of the tooltip 
+    # with "paste" function
+    y <- y[,c("PMABM","Tumor type simple","Resultaat RNA seq (relevante)")]
+    colnames(y)[c(2,3)] <- c("Tumortype","Fusie")
+    rownames(y) <- NULL
+    return((y))
+  })
+  
+  output$vals1 <- renderTable({
+    hover <- input$plot_hover1 
+    y <- nearPoints(geneValsType, input$plot_hover1, xvar = "gene", yvar = "order",threshold=10)
+    # y <- nearPoints(data(), input$plot_hover)["wt"]
+    req(nrow(y) != 0)
+    # y is a data frame and you can freely edit content of the tooltip 
+    # with "paste" function
+    y <- y[,c("PMABM","Tumor type simple","Resultaat RNA seq (relevante)")]
+    colnames(y)[c(2,3)] <- c("Tumortype","Fusie")
+    rownames(y) <- NULL
+    return((y))
   })
   
   observeEvent(input$getVcfs,ignoreInit = T,{
