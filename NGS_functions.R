@@ -688,7 +688,7 @@ mergeReports <- function(folder=folder, type=type){
     reportFiles <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
     reportFiles <- reportFiles[grep("iTHER|ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWTS,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
-    pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWTS,folder,"/",folder,"_runReport.pdf"))
+    pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWTS,folder,"/",folder,"_runReport_WTS.pdf"))
   }
   if ( type == "WES" | type == "both"){
     if (!dir.exists(paste(baseDirWES,folder,sep="/"))){
@@ -803,7 +803,7 @@ mergeReports <- function(folder=folder, type=type){
     reportFiles <- list.files(path=paste(baseDirWES,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
     reportFiles <- reportFiles[grep("iTHER|ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
-    pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWES,folder,"/",folder,"_runReport.pdf"))
+    pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWES,folder,"/",folder,"_runReport_WES.pdf"))
   }
 }
 
@@ -1235,7 +1235,7 @@ plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,folder=NULL,refD
 
 
 
-loadRefData <- function(countSet = "20200424_PMCdiag_RNAseq_counts_60357.csv"){
+loadRefData <- function(countSet = "20200608_PMCdiag_RNAseq_counts_60357.csv"){
   baseDir <- paste0(baseDirWTS,"QualityControl/expressionData/")
   refFiles <- list.files(baseDir,pattern = "geneExpressionRefData.rds")
   
@@ -1247,6 +1247,7 @@ loadRefData <- function(countSet = "20200424_PMCdiag_RNAseq_counts_60357.csv"){
     return(refData)
   }else{
     countData <- read.csv(paste0(baseDir,countSet),sep="\t",stringsAsFactors = F)
+    countData <- countData[countData$GeneName != "MIR6867",]
     samples <- sapply(colnames(countData)[c(3:ncol(countData))],function(x) strsplit(x,"_")[[1]][1])
     dups <- samples[duplicated(samples)]
     samplesDedup <- samples[!(samples %in% dups)]
