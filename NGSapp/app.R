@@ -1,7 +1,7 @@
 
 library(shiny)
 
-source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools/NGS_functions.R")
+source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/NGS_functions.R")
 
 inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
@@ -224,12 +224,20 @@ server <- function(input, output, session) {
     })
     geneValsAll <- cbind(refCohort$metaData,refCohort$counts[gene,])
     colnames(geneValsAll)[ncol(geneValsAll)] <- "gene"
+    if (!(sampleName %in% rownames(geneValsAll))){
+      geneValsAll <- rbind(geneValsAll,c(NA,NA,NA,runData[gene,sampleName]))
+      rownames(geneValsAll)[nrow(geneValsAll)] <- sampleName
+    }
     geneValsAll <- geneValsAll[order(geneValsAll$gene),]
     geneValsAll$order <- c(1:nrow(geneValsAll))
     geneValsAll$PMABM <- rownames(geneValsAll)
     geneValsAll <<- geneValsAll
-    geneValsType <- cbind(refCohort$metaData,refCohort$counts[gene,])
     geneValsType <- geneValsAll[geneValsAll$`Tumor type simple`==tumorType,]
+    if (!(sampleName %in% rownames(geneValsType))){
+      geneValsType <- rbind(geneValsType,c(NA,NA,NA,runData[gene,sampleName]))
+      rownames(geneValsType)[nrow(geneValsType)] <- sampleName
+    }
+    geneValsType <- geneValsType[order(geneValsType$gene),]
     geneValsType$order <- c(1:nrow(geneValsType))
     geneValsType <<- geneValsType
   })
