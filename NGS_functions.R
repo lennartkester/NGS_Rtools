@@ -1,6 +1,4 @@
 ## to do: ##
-## add ref cohort version to RNAseq expression plot ##
-## add WTS/WES to name run overview file ##
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
@@ -1237,17 +1235,18 @@ plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,folder=NULL,refD
 
 loadRefData <- function(countSet = "20200608_PMCdiag_RNAseq_counts_60357.csv"){
   baseDir <- paste0(baseDirWTS,"QualityControl/expressionData/")
-  refFiles <- list.files(baseDir,pattern = "geneExpressionRefData.rds")
+  refFiles <- list.files(baseDir,pattern = "refData.rds")
   
-  refFileDate <- max(sapply(refFiles, function(x) strsplit(x,"_")[[1]][1]))
-  refDataDate <- strsplit(countSet,"_")[[1]][1]
-  if (as.numeric(refFileDate) > as.numeric(refDataDate)){
-    refData <- readRDS(paste0(baseDir,refFiles[which.max(sapply(refFiles, function(x) strsplit(x,"_")[[1]][1]))]))
+#  refFileDate <- max(sapply(refFiles, function(x) strsplit(x,"_")[[1]][1]))
+#  refDataDate <- strsplit(countSet,"_")[[1]][1]
+#  if (as.numeric(refFileDate) > as.numeric(refDataDate)){
+  if (file.exists(paste0(baseDir,sub(".csv","_refData.rds",countSet)))){
+    refData <- readRDS(paste0(baseDir,sub(".csv","_refData.rds",countSet)))
     refData$counts <- apply(refData$counts,2,function(x) (x/sum(x))*1000000)
     return(refData)
   }else{
     countData <- read.csv(paste0(baseDir,countSet),sep="\t",stringsAsFactors = F)
-    countData <- countData[countData$GeneName != "MIR6867",]
+    #countData <- countData[countData$GeneName != "MIR6867",]
     samples <- sapply(colnames(countData)[c(3:ncol(countData))],function(x) strsplit(x,"_")[[1]][1])
     dups <- samples[duplicated(samples)]
     samplesDedup <- samples[!(samples %in% dups)]
@@ -1278,7 +1277,7 @@ loadRefData <- function(countSet = "20200608_PMCdiag_RNAseq_counts_60357.csv"){
     date <- gsub("-","",Sys.Date())
     tumorFusion <- tumorFusion[!is.na(tumorFusion$`Tumor type simple`),]
     countDataDedup <- countDataDedup[,rownames(tumorFusion)]
-    saveRDS(list("counts" = countDataDedup,"metaData"=tumorFusion,"version"=countSet),paste0(baseDir,date,"_geneExpressionRefData.rds"))
+    saveRDS(list("counts" = countDataDedup,"metaData"=tumorFusion,"version"=countSet),paste0(baseDir,sub(".csv","_refData.rds",countSet)))
     
     countDataDedupNorm <- apply(countDataDedup,2,function(x) (x/mean(x))*1000000)
     return(list("counts" = countDataDedupNorm,"metaData"=tumorFusion,"version"=countSet))
@@ -1599,5 +1598,5 @@ getMutationalSignature <- function(mut_mat,sample_names,pdf=F,VAF005=F){
 
 }
 
-
+source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/expressionClass.R")
 
