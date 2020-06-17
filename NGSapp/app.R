@@ -138,7 +138,8 @@ ui <- navbarPage("PMC NGS R tools",
                           ),
                           fluidRow(
                             column(4,selectInput("umapDir","Choose a seq run",choices = inputChoices)),
-                            column(3,selectInput("umapSample","Choose a sample",choices = sampleChoices))
+                            column(4,selectInput("umapSample","Choose a sample",choices = sampleChoices)),
+                            column(3,actionButton("printExpClass",tags$b("Print PDF"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                            ),
                           fluidRow(
                             style = "height:600px",
@@ -373,32 +374,24 @@ server <- function(input, output, session) {
     })
     removeModal()
   })
-  
+
   observe({
-    tumorType1 <- input$tumorType1
-    tumorType2 <- input$tumorType2
-    tumorType3 <- input$tumorType3
-    tumorType4 <- input$tumorType4
-    tumorType5 <- input$tumorType5
-    tumorType6 <- input$tumorType6
-    cols <- rainbow(6)
+    tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
     output$compareExpression <- renderPlot(height=900,width=1200,{
       par(mar=c(10,4,3,3))
-      plot(umapData$Dim1,umapData$Dim2,pch=20,xlab="Dim1",ylab="Dim2",cex=2.5,col='lightgrey')
-      points(umapData$Dim1,umapData$Dim2,pch=20,cex=2,col='darkgrey')
-      points(umapData[umapData$Tumortype == tumorType1,"Dim1"],umapData[umapData$Tumortype == tumorType1,"Dim2"],col=cols[1],pch=20,cex=2)
-      points(umapData[umapData$Tumortype == tumorType2,"Dim1"],umapData[umapData$Tumortype == tumorType2,"Dim2"],col=cols[2],pch=20,cex=2)
-      points(umapData[umapData$Tumortype == tumorType3,"Dim1"],umapData[umapData$Tumortype == tumorType3,"Dim2"],col=cols[3],pch=20,cex=2)
-      points(umapData[umapData$Tumortype == tumorType4,"Dim1"],umapData[umapData$Tumortype == tumorType4,"Dim2"],col=cols[4],pch=20,cex=2)
-      points(umapData[umapData$Tumortype == tumorType5,"Dim1"],umapData[umapData$Tumortype == tumorType5,"Dim2"],col=cols[5],pch=20,cex=2)
-      points(umapData[umapData$Tumortype == tumorType6,"Dim1"],umapData[umapData$Tumortype == tumorType6,"Dim2"],col=cols[6],pch=20,cex=2)
-      if(input$umapSample != "First select seq run"){
-        newData <- read.csv(paste0(baseDirWTS,input$umapDir,"/expressionData/",input$umapDir,"_counts.csv"),sep="\t")
-        newCoord <- newSampleCoordinates(classData = classData,newSample = newData[,input$umapSample])
-        points(newCoord,pch=20,cex=3,col='black')
-      }
-      legend("bottomright",legend=c(tumorType1,tumorType2,tumorType3,tumorType4,tumorType5,tumorType6),col=cols,pch=20,bty='n')
+      plotExpressionClass(umapData = umapData,classData = classData,tumorTypes = tumorTypes,input=input)
     })
+  })
+
+  observeEvent(input$printExpClass,ignoreInit=T, {
+    tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
+    if(input$umapSample != "First select seq run"){
+      pdf(paste0(baseDirWTS,input$umapDir,"/",input$umapSample,"_expressionClass.pdf"),width = 12,height = 7)
+      plotExpressionClass(umapData = umapData,classData = classData,tumorTypes = tumorTypes,input=input,scalePoints=0.6)
+      dev.off()
+    }else{
+      showNotification("First select seq run and sample",duration = 5,type="error")
+    }
   })
   
   output$vals3 <- renderTable({
