@@ -145,7 +145,7 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
       sampleDirs <- list.dirs(paste0(rootDir,"QualityControl/multiQCfiles/"),full.names = F)
       singleSamples <- c(singleSamples,sampleDirs[grep(paste0("^",missingSamples[1],"_PMCRZ"),sampleDirs)][1])
     }
-    
+    singleSamples <- singleSamples[sapply(singleSamples,function(x) strsplit(x,"_")[[1]][1]) %in% singleSamplesBM]
     dataList <- list()
     for ( i in 1:length(singleSamples)){
       curSampleDir <- list.dirs(paste0(rootDir,"QualityControl/multiQCfiles/",singleSamples[i]),recursive = T)[2]
@@ -232,7 +232,8 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     multiQCdata$yield <- round(as.numeric(multiQCdata$yield),0)
     
     BSlijst <- read.xlsx(fileList$bslijst)
-    BSlijst <- BSlijst[BSlijst$PMABS %in% multiQCdata$PMABS,c("Tumor.%","PMABS")]
+    BSlijst <- BSlijst[BSlijst$PMABS %in% multiQCdata$PMABS,c("Tumor.%","PMABS"),]
+    BSlijst <- BSlijst[!is.na(BSlijst$PMABS),]
     otherBS <- multiQCdata$PMABS[!(multiQCdata$PMABS %in% BSlijst$PMABS)]
     if (length(otherBS) > 0){
       otherBSMat <- matrix(ncol=2,nrow=length(otherBS))
