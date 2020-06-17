@@ -5,6 +5,8 @@ source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtool
 
 inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
+classData <- generateUmapData(refCohort = refCohort)
+umapData <- classData$umapData
 tumorChoices <- unique(refCohort$metaData$`Tumor type simple`)
 tumorChoices <- c("NULL",tumorChoices[order(tumorChoices)])
 geneValsAll <- geneValsType <- NULL
@@ -115,6 +117,62 @@ ui <- navbarPage("PMC NGS R tools",
                             br(),
                             mainPanel(width = 12,plotOutput("plotSignature")
                             )
+                          )
+                 ),
+                 tabPanel(tags$b("Compare expression"),
+                          fluidRow(
+                            column(4,titlePanel(h4("Highlight tumor types")))
+                          ),
+                          fluidRow(
+                            column(4,selectInput("tumorType1", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(4,selectInput("tumorType2", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(4,selectInput("tumorType3", "Choose a Tumortype:",choices = tumorChoices))
+                          ),
+                          fluidRow(
+                            column(4,selectInput("tumorType4", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(4,selectInput("tumorType5", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(4,selectInput("tumorType6", "Choose a Tumortype:",choices = tumorChoices))
+                          ),
+                          fluidRow(
+                            column(4,titlePanel(h4("Add new sample")))
+                          ),
+                          fluidRow(
+                            column(4,selectInput("umapDir","Choose a seq run",choices = inputChoices)),
+                            column(3,selectInput("umapSample","Choose a sample",choices = sampleChoices))
+                           ),
+                          fluidRow(
+                            style = "height:600px",
+                            tags$head(tags$style('#my_tooltip3 {background-color: rgba(255,255,255,0.8);position: absolute;width: 600px;z-index: 100;}')),
+                            tags$script('$(document).ready(function(){
+                                        // id of the plot
+                                        $("#compareExpression").mousemove(function(e){ // ID of uiOutput
+                                        $("#my_tooltip3").show();
+                                        $("#my_tooltip3").css({
+                                        top: (e.pageY - 400) + "px",
+                                        left: (e.pageX - 0) + "px"
+                                        });
+                                        });
+                                        });
+                                        '),
+                            
+                            br(),
+                            mainPanel(
+                              width = 12,
+                              plotOutput("compareExpression",hover = hoverOpts(id = "plot_hover3", delay = 0),inline=T),
+                              uiOutput("my_tooltip3")
+                            ),
+                            br(),
+                            br(),
+                            br(),
+                            br(),
+                            br(),
+                            br(),
+                            br(),
+                            br(),
+                            br(),
+                            br()
+                            
+                            
                           )
                  ),
                 tags$style(HTML(".navbar-default .navbar-brand {color: #ffffff;}
@@ -242,14 +300,6 @@ server <- function(input, output, session) {
     geneValsType <<- geneValsType
   })
   
-  output$my_tooltip2 <- renderUI({
-    hover <- input$plot_hover2 
-    y <- nearPoints(geneValsAll, input$plot_hover2, xvar = "gene", yvar = "order",threshold = 10)
-    req(nrow(y) != 0)
-    #verbatimTextOutput("vals")
-    tableOutput("vals2")
-  })
-  
   output$my_tooltip1 <- renderUI({
     hover <- input$plot_hover1 
     y <- nearPoints(geneValsType, input$plot_hover1, xvar = "gene", yvar = "order",threshold=10)
@@ -258,9 +308,17 @@ server <- function(input, output, session) {
     tableOutput("vals1")
   })
   
-  output$vals2 <- renderTable({
+  output$my_tooltip2 <- renderUI({
     hover <- input$plot_hover2 
-    y <- nearPoints(geneValsAll, input$plot_hover2, xvar = "gene", yvar = "order",threshold=10)
+    y <- nearPoints(geneValsAll, input$plot_hover2, xvar = "gene", yvar = "order",threshold = 10)
+    req(nrow(y) != 0)
+    #verbatimTextOutput("vals")
+    tableOutput("vals2")
+  })
+  
+  output$vals1 <- renderTable({
+    hover <- input$plot_hover1 
+    y <- nearPoints(geneValsType, input$plot_hover1, xvar = "gene", yvar = "order",threshold=10)
     # y <- nearPoints(data(), input$plot_hover)["wt"]
     req(nrow(y) != 0)
     # y is a data frame and you can freely edit content of the tooltip 
@@ -271,9 +329,9 @@ server <- function(input, output, session) {
     return((y))
   })
   
-  output$vals1 <- renderTable({
-    hover <- input$plot_hover1 
-    y <- nearPoints(geneValsType, input$plot_hover1, xvar = "gene", yvar = "order",threshold=10)
+  output$vals2 <- renderTable({
+    hover <- input$plot_hover2 
+    y <- nearPoints(geneValsAll, input$plot_hover2, xvar = "gene", yvar = "order",threshold=10)
     # y <- nearPoints(data(), input$plot_hover)["wt"]
     req(nrow(y) != 0)
     # y is a data frame and you can freely edit content of the tooltip 
@@ -315,6 +373,61 @@ server <- function(input, output, session) {
     })
     removeModal()
   })
+  
+  observe({
+    tumorType1 <- input$tumorType1
+    tumorType2 <- input$tumorType2
+    tumorType3 <- input$tumorType3
+    tumorType4 <- input$tumorType4
+    tumorType5 <- input$tumorType5
+    tumorType6 <- input$tumorType6
+    cols <- rainbow(6)
+    output$compareExpression <- renderPlot(height=900,width=1200,{
+      par(mar=c(10,4,3,3))
+      plot(umapData$Dim1,umapData$Dim2,pch=20,xlab="Dim1",ylab="Dim2",cex=2.5,col='lightgrey')
+      points(umapData$Dim1,umapData$Dim2,pch=20,cex=2,col='darkgrey')
+      points(umapData[umapData$Tumortype == tumorType1,"Dim1"],umapData[umapData$Tumortype == tumorType1,"Dim2"],col=cols[1],pch=20,cex=2)
+      points(umapData[umapData$Tumortype == tumorType2,"Dim1"],umapData[umapData$Tumortype == tumorType2,"Dim2"],col=cols[2],pch=20,cex=2)
+      points(umapData[umapData$Tumortype == tumorType3,"Dim1"],umapData[umapData$Tumortype == tumorType3,"Dim2"],col=cols[3],pch=20,cex=2)
+      points(umapData[umapData$Tumortype == tumorType4,"Dim1"],umapData[umapData$Tumortype == tumorType4,"Dim2"],col=cols[4],pch=20,cex=2)
+      points(umapData[umapData$Tumortype == tumorType5,"Dim1"],umapData[umapData$Tumortype == tumorType5,"Dim2"],col=cols[5],pch=20,cex=2)
+      points(umapData[umapData$Tumortype == tumorType6,"Dim1"],umapData[umapData$Tumortype == tumorType6,"Dim2"],col=cols[6],pch=20,cex=2)
+      if(input$umapSample != "First select seq run"){
+        newData <- read.csv(paste0(baseDirWTS,input$umapDir,"/expressionData/",input$umapDir,"_counts.csv"),sep="\t")
+        newCoord <- newSampleCoordinates(classData = classData,newSample = newData[,input$umapSample])
+        points(newCoord,pch=20,cex=3,col='black')
+      }
+      legend("bottomright",legend=c(tumorType1,tumorType2,tumorType3,tumorType4,tumorType5,tumorType6),col=cols,pch=20,bty='n')
+    })
+  })
+  
+  output$vals3 <- renderTable({
+    hover <- input$plot_hover3 
+    y <- nearPoints(umapData, input$plot_hover3, xvar = "Dim1", yvar = "Dim2",threshold=5)
+    # y <- nearPoints(data(), input$plot_hover)["wt"]
+    req(nrow(y) != 0)
+    # y is a data frame and you can freely edit content of the tooltip 
+    # with "paste" function
+    y <- y[,c("PMABM","Tumortype","Fusion","HIX")]
+    if (nrow(y) > 5){
+      y <- y[c(1:5),]
+    }
+    rownames(y) <- NULL
+    return((y))
+  })
+  
+  output$my_tooltip3 <- renderUI({
+    hover <- input$plot_hover3 
+    y <- nearPoints(umapData, input$plot_hover3, xvar = "Dim1", yvar = "Dim2",threshold = 5)
+    req(nrow(y) != 0)
+    tableOutput("vals3")
+  })
+  
+ observe({
+   seqRun <- input$umapDir
+   WTSoverview <- loadRNAseqOverview(folder=seqRun)
+   updateSelectInput(session,"umapSample",choices=WTSoverview$`Biomaterial ID` )
+ })
   
 }
 
