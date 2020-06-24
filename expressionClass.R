@@ -16,7 +16,7 @@ generateUmapData <- function(refCohort,nFeatures=5000,nComp=100){
     varGenes <- apply(dataLog,1,var)
     meanGenes <- apply(dataLog,1,mean)
     
-    varFeatures <- names(varGenes)[order(varGenes,decreasing = T)][c(1:2000)]
+    varFeatures <- names(varGenes)[order(varGenes,decreasing = T)][c(1:nFeatures)]
     
     ## scale data (subtract mean and divide by variance) and store scaling factors ##
     dataScale <- apply(dataLog,2,function(x) (x-meanGenes)/varGenes)
@@ -25,7 +25,7 @@ generateUmapData <- function(refCohort,nFeatures=5000,nComp=100){
     pr <- prcomp(t(dataScale[varFeatures,]))
     ## to transform new sample do : ((log(newSample+1)-meanGenes)/varGenes)[varFeatures,] %*% pr$rotation
 
-    dataUmap <- umap(pr$x[,c(1:100)],alpha=1,gamma=1)
+    dataUmap <- umap(pr$x[,c(1:nComp)],alpha=1,gamma=1)
     umapData <- cbind(rownames(dataUmap$layout),dataUmap$layout,refCohort$metaData)
     colnames(umapData) <- c("PMABM","Dim1","Dim2","Tumortype","Fusion","HIX")
     umapAll <- list("umapData"=umapData,"princomp"=pr,"meanGenes"=meanGenes,"varGenes"=varGenes,"varFeatures"=varFeatures,"umapFull"=dataUmap)
