@@ -1,6 +1,8 @@
 ## to do: ##
+## log scale number of novel variants ##
 
-packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace")
+
+packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace","umap")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
   install.packages(setdiff(packages, rownames(installed.packages())))  
 }
@@ -69,8 +71,7 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
       destFile <- paste(rootDir,seqRunDir,"/",fileName,sep="")
       GET(vcfFiles[i], authenticate("lkester", "Dm1mYaiS"),write_disk(destFile,overwrite = T))
     }
-    
-    
+        
     multiQCfiles <- getFileList(seqRunDir, rootDir, "multiqc_data.zip")$targetFiles
     
     downloadedSamples <- list.files(paste0(rootDir,"QualityControl/multiQCfiles/"),pattern = "zip",full.names = T)
@@ -268,6 +269,24 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     metaData$MeanCoverageTumor <- round(as.numeric(metaData$MeanCoverageTumor),0)
     metaData$MeanCoverageNormal <- round(as.numeric(metaData$MeanCoverageNormal),0)
     write.xlsx(metaData,paste0(rootDir,seqRunDir,"/metaData_LKR.xlsx"))
+    
+    vcfFiles2 <- getFileList(seqRunDir,rootDir,pattern = "WXS.vcf.gz")$targetFiles
+    if(!dir.exists(paste0(rootDir,seqRunDir,"/rawData"))){
+      dir.create(paste0(rootDir,seqRunDir,"/rawData"))
+    }
+    for ( i in 1:length(vcfFiles2)){
+      fileName <- sub("http://files.bioinf.prinsesmaximacentrum.nl/WXS/","",vcfFiles2[i])
+      destFile <- paste(rootDir,seqRunDir,"/rawData/",fileName,sep="")
+      if (!file.exists(destFile)){
+        GET(vcfFiles2[i], authenticate("lkester", "Dm1mYaiS"),write_disk(destFile,overwrite = F))
+        if(length(strsplit(fileName,"_")[[1]]) == 3){
+          alissaSingleSampleVCF(folder = seqRunDir, vcfFile = fileName)
+        }else if(length(strsplit(fileName,"_")[[1]]) == 4){
+          alissaSomaticVCF(folder = seqRunDir, vcfFile = fileName)
+        }
+      }
+    }
+    
     
     return(metaData)
   }
@@ -1234,7 +1253,7 @@ plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,folder=NULL,refD
 
 
 
-loadRefData <- function(countSet = "20200608_PMCdiag_RNAseq_counts_60357.csv"){
+loadRefData <- function(countSet = "20200623_PMCdiag_RNAseq_counts_60357.csv"){
   baseDir <- paste0(baseDirWTS,"QualityControl/expressionData/")
   refFiles <- list.files(baseDir,pattern = "refData.rds")
   
@@ -1600,4 +1619,119 @@ getMutationalSignature <- function(mut_mat,sample_names,pdf=F,VAF005=F){
 }
 
 source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/expressionClass.R")
+
+alissaSingleSampleVCF <- function(folder,vcfFile,addAF=F){
+  fullVcfFile <- paste0(baseDirWES,folder,"/rawData/",vcfFile)
+  vcfAlissa <- sub(".vcf.gz","_Alissa.vcf",fullVcfFile)
+  ref_genome <- "BSgenome.Hsapiens.UCSC.hg38"
+  gunzip(fullVcfFile)
+  fullVcfFile <- sub(".gz","",fullVcfFile)
+  vcf <- vcfR::read.vcfR(fullVcfFile)
+  
+  vcf@meta <- c("##reference=GRCh38",vcf@meta)
+  
+  altAlleles <- sapply(vcf@fix[,"ALT"],function(x) strsplit(x,",")[[1]])
+  moreThan4 <- which(lapply(altAlleles,length) > 4)
+  if(length(moreThan4)>0){
+    for ( i in 1:length(moreThan4)){
+      fixed <- vcf@fix[moreThan4[i],]
+      gt <- strsplit(vcf@gt[moreThan4[i],3],":")[[1]]
+      gtAD <- unlist(strsplit(gt[2],",")[[1]])
+      gtGT <- unlist(strsplit(gt[1],"/")[[1]])
+      fixedAlt <- unlist(strsplit(fixed["ALT"],","))
+      allelesToKeep <- (order(as.numeric(gtAD)[-1],decreasing = T)[c(1:4)])
+      allelesToKeep <- allelesToKeep[order(allelesToKeep)]
+      fixed["ALT"] <- fixedAlt[allelesToKeep]
+      gtAD <- gtAD[c(1,allelesToKeep+1)]
+      paste(fixedAlt,collapse=",")
+      fixed["FILTER"] <- paste0(fixed["FILTER"],";more_than_4_alt_alleles")
+      gtGT[2] <- "4"
+      gt[1] <- paste(gtGT,collapse = "/")
+      gt[2] <- paste(gtAD,collapse = ",")
+      vcf@gt[moreThan4[i],3] <- paste(gt,collapse = ":")
+      vcf@fix[moreThan4[i,]] <- fixed
+    }
+  }
+  if(addAF){
+    gtOptions <- gtOptionsAF <- unique(vcf@gt[,1])
+    for (i in 1:length(gtOptions)){
+      FORMAT <- strsplit(gtOptions[i],":AD:")[[1]]
+      gtOptionsAF[i] <- paste0(FORMAT[1],":AD:AF:",FORMAT[2])
+    }
+    names(gtOptionsAF) <- gtOptions
+    vcf@gt[,1] <- gtOptionsAF[vcf@gt[,1]]
+    gt <- t(apply(vcf@gt,1,function(x) {
+      #x[1] <- gtOptionsAF[x[1]]
+      if(!is.na(x[2])){
+        gtSNV <- strsplit(x[2],":")[[1]]
+        gtSNVaf <- as.numeric(strsplit(gtSNV[2],",")[[1]])
+        gtSNVaf <- paste(round(gtSNVaf[-1]/sum(gtSNVaf),2),collapse=",")
+        gtSNV <- c(gtSNV[c(1,2)],gtSNVaf,gtSNV[c(3:length(gtSNV))])
+        gtSNV <- paste(gtSNV,collapse = ":")
+        x[2] <- gtSNV
+      }else{
+        gtSNV <- strsplit(x[3],":")[[1]]
+        gtSNVaf <- as.numeric(strsplit(gtSNV[2],",")[[1]])
+        gtSNVaf <- paste(round(gtSNVaf[-1]/sum(gtSNVaf),2),collapse=",")
+        gtSNV <- c(gtSNV[c(1,2)],gtSNVaf,gtSNV[c(3:length(gtSNV))])
+        gtSNV <- paste(gtSNV,collapse = ":")
+        x[3] <- gtSNV
+      }
+      return(x)
+    }))
+    vcf@gt <- gt
+  }
+  vcfR::write.vcf(vcf,vcfAlissa)
+  gzip(fullVcfFile)
+
+}
+
+alissaSomaticVCF <- function(folder,vcfFile){
+  fullVcfFile <- paste0(baseDirWES,folder,"/rawData/",vcfFile)
+  vcfAlissa <- sub(".vcf.gz","_Alissa.vcf",fullVcfFile)
+  ref_genome <- "BSgenome.Hsapiens.UCSC.hg38"
+  gunzip(fullVcfFile)
+  fullVcfFile <- sub(".gz","",fullVcfFile)
+  vcf <- vcfR::read.vcfR(fullVcfFile)
+  tumor <- strsplit(vcfFile,"_")[[1]][1]
+  normal <- strsplit(vcfFile,"_")[[1]][2]
+  
+  vcf@meta <- c(vcf@meta[1],"##reference=GRCh38",vcf@meta[2:length(vcf@meta)])
+  
+  altAlleles <- sapply(vcf@fix[,"ALT"],function(x) strsplit(x,",")[[1]])
+  moreThan4 <- which(lapply(altAlleles,length) > 4)
+  for ( i in 1:length(moreThan4)){
+    fixed <- vcf@fix[moreThan4[i],]
+    gtTumor <- strsplit(vcf@gt[moreThan4[i],tumor],":")[[1]]
+    gtNormal <- strsplit(vcf@gt[moreThan4[i],normal],":")[[1]]
+    gtTumorAF <- unlist(strsplit(gtTumor[3],",")[[1]])
+    gtNormalAF <- unlist(strsplit(gtNormal[3],",")[[1]])
+    gtTumorAD <- unlist(strsplit(gtTumor[2],",")[[1]])
+    gtNormalAD <- unlist(strsplit(gtNormal[2],",")[[1]])
+    gtTumorGT <- unlist(strsplit(gtTumor[1],"/")[[1]])
+    gtNormalGT <- unlist(strsplit(gtNormal[1],"/")[[1]])
+    fixedAlt <- unlist(strsplit(fixed["ALT"],","))
+    allelesToKeep <- (order(as.numeric(gtTumorAD)[-1],decreasing = T)[c(1:4)])
+    allelesToKeep <- allelesToKeep[order(allelesToKeep)]
+    fixedAlt <- fixedAlt[allelesToKeep]
+    gtTumorAD <- gtTumorAD[c(1,allelesToKeep+1)]
+    gtNormalAD <- gtNormalAD[c(1,allelesToKeep+1)]
+    gtTumorAF <- gtTumorAF[c(allelesToKeep+1)]
+    gtNormalAF <- gtNormalAF[c(allelesToKeep+1)]
+    #gtTumorGT <- gtTumorGT[c(1,allelesToKeep+1)]
+    gtTumorGT <- as.character(c(0:4))
+    gtTumor[1] <- paste(gtTumorGT,collapse = "/")
+    gtNormal[2] <- paste(gtNormalAD,collapse = ",")
+    gtTumor[2] <- paste(gtTumorAD,collapse = ",")
+    gtNormal[3] <- paste(gtNormalAF,collapse = ",")
+    gtTumor[3] <- paste(gtTumorAF,collapse = ",")
+    fixed["ALT"] <- paste(fixedAlt,collapse=",")
+    fixed["FILTER"] <- paste0(fixed["FILTER"],";more_than_4_alt_alleles")
+    vcf@gt[moreThan4[i],normal] <- paste(gtNormal,collapse = ":")
+    vcf@gt[moreThan4[i],tumor] <- paste(gtTumor,collapse = ":")
+    vcf@fix[moreThan4[i],] <- fixed
+  }
+  vcfR::write.vcf(vcf,vcfAlissa)
+  gzip(fullVcfFile)
+}
 
