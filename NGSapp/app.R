@@ -2,6 +2,7 @@
 library(shiny)
 
 source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/NGS_functions.R")
+source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/expressionClass.R")
 
 inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
