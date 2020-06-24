@@ -1618,7 +1618,6 @@ getMutationalSignature <- function(mut_mat,sample_names,pdf=F,VAF005=F){
 
 }
 
-source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/expressionClass.R")
 
 alissaSingleSampleVCF <- function(folder,vcfFile,addAF=F){
   fullVcfFile <- paste0(baseDirWES,folder,"/rawData/",vcfFile)
