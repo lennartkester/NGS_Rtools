@@ -125,23 +125,29 @@ ui <- navbarPage("PMC NGS R tools",
                             column(4,titlePanel(h4("Highlight tumor types")))
                           ),
                           fluidRow(
-                            column(4,selectInput("tumorType1", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(4,selectInput("tumorType2", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(4,selectInput("tumorType3", "Choose a Tumortype:",choices = tumorChoices))
+                            column(3,selectInput("tumorType1", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(3,selectInput("tumorType2", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(3,selectInput("tumorType3", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,actionButton("resetClassPlot",tags$b("Reset"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                           ),
                           fluidRow(
-                            column(4,selectInput("tumorType4", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(4,selectInput("tumorType5", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(4,selectInput("tumorType6", "Choose a Tumortype:",choices = tumorChoices))
+                            column(3,selectInput("tumorType4", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(3,selectInput("tumorType5", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(3,selectInput("tumorType6", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,actionButton("highlightTypes",tags$b("Highlight tumortypes"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                           ),
                           fluidRow(
                             column(4,titlePanel(h4("Add new sample")))
                           ),
                           fluidRow(
-                            column(4,selectInput("umapDir","Choose a seq run",choices = inputChoices)),
-                            column(4,selectInput("umapSample","Choose a sample",choices = sampleChoices)),
+                            column(3,selectInput("umapDir","Choose a seq run",choices = inputChoices)),
+                            column(3,selectInput("umapSample","Choose a sample",choices = sampleChoices)),
+                            column(3,actionButton("addSampleExpClass",tags$b("Classify sample"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff")),
                             column(3,actionButton("printExpClass",tags$b("Print PDF"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                            ),
+                          fluidRow(
+                            mainPanel(width = 12,tableOutput("classTable"))
+                          ),
                           fluidRow(
                             style = "height:600px",
                             tags$head(tags$style('#my_tooltip3 {background-color: rgba(255,255,255,0.8);position: absolute;width: 600px;z-index: 100;}')),
@@ -375,15 +381,42 @@ server <- function(input, output, session) {
     })
     removeModal()
   })
-
-  observe({
+  
+  classPlotInput <- reactiveValues(tumorTypes=NULL,classSample=NULL,highlightGene=NULL,neighbours=NULL)
+  
+  observeEvent(input$resetClassPlot,ignoreInit = T,{
+    classPlotInput$tumorTypes <- NULL
+    classPlotInput$classSample <- NULL
+    classPlotInput$highlightGene <- NULL
+    classPlotInput$neighbours <- NULL
+    
+  })
+  
+  observeEvent(input$highlightTypes, ignoreInit = T, {
     tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
-    output$compareExpression <- renderPlot(height=900,width=1200,{
-      par(mar=c(10,4,3,3))
-      plotExpressionClass(umapData = umapData,classData = classData,tumorTypes = tumorTypes,input=input)
-    })
+    classPlotInput$tumorTypes <- tumorTypes
+  })
+  
+  observeEvent(input$addSampleExpClass, ignoreInit = T, {
+    neighbours <- NULL
+    if(input$umapSample != "First select seq run"){
+      classResults <- predictClass(input = input,classData = classData)
+      res <- classResults$results
+      res <- as.matrix(res[,order(res,decreasing = T)[c(1:3)]])
+      colnames(res) <- input$umapSample
+      output$classTable <- renderTable(rownames = T,{
+        t(res)/100
+      })
+      classPlotInput$neighbours <- classResults$neighbours
+      classPlotInput$classSample <- list(umapDir=input$umapDir,umapSample=input$umapSample)
+    }    
   })
 
+  output$compareExpression <- renderPlot(height=900,width=1200,{
+    par(mar=c(10,4,3,3))
+    plotExpressionClass(umapData = umapData,classData = classData,tumorTypes = classPlotInput$tumorTypes,umapDir=classPlotInput$classSample$umapDir,umapSample=classPlotInput$classSample$umapSample,neighbours=classPlotInput$neighbours)
+  })
+  
   observeEvent(input$printExpClass,ignoreInit=T, {
     tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
     if(input$umapSample != "First select seq run"){
