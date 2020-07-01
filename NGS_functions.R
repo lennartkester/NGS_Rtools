@@ -1,8 +1,11 @@
 ## to do: ##
 ## log scale number of novel variants ##
+## warn if no reports present prior to merge reports ##
+## tryCatch around combine pdf, warn if file is opened ##
+## download missing expression data in classifier ##
+## highlight sampl is present otherwise project transformed coordinates ##
 
-
-packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace","umap")
+packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace","umap","kknn")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
   install.packages(setdiff(packages, rownames(installed.packages())))  
 }
@@ -26,6 +29,7 @@ library(MutationalPatterns)
 library(vcfR)
 library(R.utils)
 library(colorspace)
+library(kknn)
 
 baseDirWES <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WES/"
 baseDirWTS <-  "G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)/"
@@ -836,7 +840,7 @@ generateReport <- function(folder=folder, type=type){
     }
     message("Start generating WTS reports")
     samples <- list.files(paste(baseDirWTS,folder,sep="/"),pattern = ".xlsx")
-    samples <- samples[grep("PMABM",samples)]
+    samples <- samples[grep("PMABM|PMGBM|PMLBM",samples)]
     samples <- sapply(samples,function(x) strsplit(x,"_")[[1]][1])
     samples <- unique(samples)
     samples <- gsub("~\\$","",samples)
@@ -860,7 +864,7 @@ generateReport <- function(folder=folder, type=type){
     }
     message("Start generating WES reports")
     samples <- list.files(paste(baseDirWES,folder,sep="/"),pattern = ".qci")
-    samples <- samples[grep("PMABM",samples)]
+    samples <- samples[grep("PMABM|PMGBM|PMLBM",samples)]
     samples <- sapply(samples,function(x) strsplit(x,"_")[[1]][1])
     samples <- unique(samples)
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWES,folder,"metaData_LKR.xlsx",sep="/")))
@@ -1268,8 +1272,9 @@ loadRefData <- function(countSet = "20200623_PMCdiag_RNAseq_counts_60357.csv"){
     countData <- read.csv(paste0(baseDir,countSet),sep="\t",stringsAsFactors = F)
     #countData <- countData[countData$GeneName != "MIR6867",]
     samples <- sapply(colnames(countData)[c(3:ncol(countData))],function(x) strsplit(x,"_")[[1]][1])
-    dups <- samples[duplicated(samples)]
-    samplesDedup <- samples[!(samples %in% dups)]
+    #dups <- samples[duplicated(samples)]
+    #samplesDedup <- samples[!(samples %in% dups)]
+    samplesDedup <- samples
     
     metaData <- loadRNAseqOverview(samples=samplesDedup,type="biomaterial")
     dupSamples <- rownames(metaData)[grep("\\.1",rownames(metaData))]
@@ -1297,6 +1302,19 @@ loadRefData <- function(countSet = "20200623_PMCdiag_RNAseq_counts_60357.csv"){
     date <- gsub("-","",Sys.Date())
     tumorFusion <- tumorFusion[!is.na(tumorFusion$`Tumor type simple`),]
     countDataDedup <- countDataDedup[,rownames(tumorFusion)]
+    
+    mostRecentQC <- list.files(paste(baseDirWTS,"QualityControl/QualityData",sep="/"),pattern = ".csv",full.names = T)
+    mostRecentQC <- mostRecentQC[length(mostRecentQC)]
+    qcData <- read.csv(mostRecentQC,sep="\t",stringsAsFactors = F)
+    enoughReads <- qcData$Biomaterial.ID[qcData$uniqueReads.10.6. > 30]
+    countDataDedup <- countDataDedup[,colnames(countDataDedup) %in% enoughReads]
+    
+    ## remove wrong samples ##
+    countDataDedup[,c("PMABM000AGL","PMABM000AGN")] <- countDataDedup[,c("PMABM000AGN","PMABM000AGL")]
+    countDataDedup <- countDataDedup[,!(colnames(countDataDedup) %in% c("PMABM000BJE","PMABM000BJG","PMABM000BJI","PMABM000BJK","PMABM000BJO","PMABM000BJU","PMABM000BKF"))]
+    countDataDedup <- countDataDedup[,rownames(tumorFusion)[tumorFusion$`Tumor type simple` !="No HiX diagnosis"]]
+    
+    tumorFusion <- tumorFusion[colnames(countDataDedup),]
     saveRDS(list("counts" = countDataDedup,"metaData"=tumorFusion,"version"=countSet),paste0(baseDir,sub(".csv","_refData.rds",countSet)))
     
     countDataDedupNorm <- apply(countDataDedup,2,function(x) (x/mean(x))*1000000)
@@ -1403,7 +1421,7 @@ qcBoxplotWES <- function(dataRun,dataAll,samples,variable){
     data[,1] <- as.numeric(as.character(data[,1]))
   }
   if(variable == "novelVariants"){
-    boxplot(list("tumor"=data[data[,2] == "Tumor",1]),col=c('lightgrey'),ylab=variable,main=variable,cex.lab=1.2,cex.axis=1.2,las=2)
+    boxplot(log10(data[data[,2] == "Tumor",1]),col=c('lightgrey'),ylab=paste("log10",variable),main=variable,cex.lab=1.2,cex.axis=1.2,las=2)
   }else{
     boxplot(list("tumor"=data[data[,2] == "Tumor",1],"normal"=data[data[,2] == "Normal",1]),col=c('darkgrey','lightgrey'),ylab=variable,main=variable,cex.lab=1.2,cex.axis=1.2,las=2)
   }
