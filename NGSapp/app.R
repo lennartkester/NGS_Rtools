@@ -137,6 +137,13 @@ ui <- navbarPage("PMC NGS R tools",
                             column(2,actionButton("highlightTypes",tags$b("Highlight tumortypes"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                           ),
                           fluidRow(
+                            column(4,titlePanel(h4("Highlight gene")))
+                          ),
+                          fluidRow(
+                            column(3,textInput("geneExpressionClass","Gene",value = NULL)),
+                            column(2,actionButton("highlightGeneClass",tags$b("Highlight gene"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
+                          ),
+                          fluidRow(
                             column(4,titlePanel(h4("Add new sample")))
                           ),
                           fluidRow(
@@ -156,7 +163,7 @@ ui <- navbarPage("PMC NGS R tools",
                                         $("#compareExpression").mousemove(function(e){ // ID of uiOutput
                                         $("#my_tooltip3").show();
                                         $("#my_tooltip3").css({
-                                        top: (e.pageY - 400) + "px",
+                                        top: (e.pageY - 600) + "px",
                                         left: (e.pageX - 0) + "px"
                                         });
                                         });
@@ -186,7 +193,20 @@ ui <- navbarPage("PMC NGS R tools",
                 tags$style(HTML(".navbar-default .navbar-brand {color: #ffffff;}
                                  .navbar { background-color: #fd8723;}
                                  .navbar-default .navbar-nav > li > a {color:#ffffff;}
-                                 "))
+                                 ")),
+                tags$head(
+                  tags$style(
+                    HTML(".shiny-notification {
+                         position:fixed;
+                         width:300px;  
+                         top: calc(22px);
+                         left: calc(250px);
+                         opacity: 1;
+                         }
+                         "
+                    )
+                  )
+                )
 )
 
 #                                  .navbar-default .navbar-nav > .active > a:hover {color: #ffffff;background-color: fca768;}
@@ -238,20 +258,26 @@ server <- function(input, output, session) {
   observeEvent(input$makeReport,ignoreInit = T,{
     type <- input$typeMakeReport
     showModal(modalDialog("Generating reports", footer=NULL))
-    generateReport(folder = input$seqrunMakeReport,type = type)
+    out <- generateReport(folder = input$seqrunMakeReport,type = type)
     removeModal()
-    output$messages <- renderTable({
-      return("Succesfully made reports")
-    })
+    if(out != "Succesfully generated reports"){
+      showNotification(paste(out),duration = 10,closeButton = T,type = "error")
+    }else{
+      showNotification(paste(out),duration = 5,closeButton = T,type = "default")
+      
+    }
+    #output$messages <- renderTable({
+    #  return(out)
+    #})
   })
   
   observeEvent(input$mergeReport,ignoreInit = T,{
      type <- input$typeMergeReport
      showModal(modalDialog("Merging reports", footer=NULL))
-     mergeReports(folder = input$seqrunMergeReport,type = type)
+     out <- mergeReports(folder = input$seqrunMergeReport,type = type)
      removeModal()
      output$messages <- renderTable({
-       return("Succesfully merged reports")
+       return(out)
      })
   })
   
@@ -382,12 +408,12 @@ server <- function(input, output, session) {
     removeModal()
   })
   
-  classPlotInput <- reactiveValues(tumorTypes=NULL,classSample=NULL,highlightGene=NULL,neighbours=NULL)
+  classPlotInput <- reactiveValues(tumorTypes=NULL,classSample=NULL,geneExpressionClass=NULL,neighbours=NULL)
   
   observeEvent(input$resetClassPlot,ignoreInit = T,{
     classPlotInput$tumorTypes <- NULL
     classPlotInput$classSample <- NULL
-    classPlotInput$highlightGene <- NULL
+    classPlotInput$geneExpressionClass <- NULL
     classPlotInput$neighbours <- NULL
     
   })
@@ -395,6 +421,14 @@ server <- function(input, output, session) {
   observeEvent(input$highlightTypes, ignoreInit = T, {
     tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
     classPlotInput$tumorTypes <- tumorTypes
+    classPlotInput$geneExpressionClass <- NULL
+  })
+  
+  observeEvent(input$highlightGeneClass, ignoreInit = T, {
+    classPlotInput$geneExpressionClass <- input$geneExpressionClass
+    classPlotInput$tumorTypes <- NULL
+    classPlotInput$classSample <- NULL
+    classPlotInput$neighbours <- NULL
   })
   
   observeEvent(input$addSampleExpClass, ignoreInit = T, {
@@ -409,12 +443,19 @@ server <- function(input, output, session) {
       })
       classPlotInput$neighbours <- classResults$neighbours
       classPlotInput$classSample <- list(umapDir=input$umapDir,umapSample=input$umapSample)
+      classPlotInput$geneExpressionClass <- NULL
     }    
   })
 
   output$compareExpression <- renderPlot(height=900,width=1200,{
     par(mar=c(10,4,3,3))
-    plotExpressionClass(umapData = umapData,classData = classData,tumorTypes = classPlotInput$tumorTypes,umapDir=classPlotInput$classSample$umapDir,umapSample=classPlotInput$classSample$umapSample,neighbours=classPlotInput$neighbours)
+    plotExpressionClass(umapData = umapData,
+                        classData = classData,
+                        tumorTypes = classPlotInput$tumorTypes,
+                        umapDir=classPlotInput$classSample$umapDir,
+                        umapSample=classPlotInput$classSample$umapSample,
+                        neighbours=classPlotInput$neighbours,
+                        geneExpressionClass=classPlotInput$geneExpressionClass)
   })
   
   observeEvent(input$printExpClass,ignoreInit=T, {
