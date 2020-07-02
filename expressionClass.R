@@ -68,7 +68,7 @@ newSamplePrinComp <- function(classData,newSample){
   ((log(((newSample/sum(newSample))*1000000)+1)-classData$meanGenes)/classData$varGenes)[classData$varFeatures] %*% classData$princomp$rotation
 }
 
-plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapSample=NULL,scalePoints=1,neighbours=NULL){
+plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapSample=NULL,scalePoints=1,neighbours=NULL,geneExpressionClass=NULL){
   cols <- rainbow(6)
   plot(umapData$Dim1,umapData$Dim2,pch=20,xlab="Dim1",ylab="Dim2",cex=2.5*scalePoints,col='lightgrey')
   points(umapData$Dim1,umapData$Dim2,pch=20,cex=2*scalePoints,col='darkgrey')
@@ -106,6 +106,25 @@ plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapS
     text(x=legendRange[101],y=legendy+((max(umapData$Dim2)-min(umapData$Dim2))*0.025),labels = "1")
     text(x=legendRange[50],y=legendy+((max(umapData$Dim2)-min(umapData$Dim2))*0.025),labels = "Similarity")
   }
+  if(!is.null(geneExpressionClass)){
+    if(!(geneExpressionClass %in% rownames(refCohort$counts))){
+      return()
+    }
+    geneData <- refCohort$counts[geneExpressionClass,]
+    #geneData <- (geneData-mean(geneData))/sd(geneData)
+    colorSeq <- c(min(geneData)-0.1,seq(quantile(geneData,c(0.10,0.99))[1],quantile(geneData,c(0.10,0.99))[2],length.out = 98),max(geneData))
+    cols <- rev(magma(100))[as.numeric(cut(geneData,colorSeq))]
+    names(cols) <- colnames(refCohort$counts)
+    points(umapData$Dim1,umapData$Dim2,pch=20,cex=2*scalePoints,col=cols[umapData$PMABM])
+    legendRange <- seq((min(umapData$Dim1)+max(umapData$Dim1))-((max(umapData$Dim1)-min(umapData$Dim1))*0.1),(min(umapData$Dim1)+max(umapData$Dim1))+((max(umapData$Dim1)-min(umapData$Dim1))*0.1),length.out = 101)
+    legendy <- min(umapData$Dim2)
+    for(i in 1:100){
+      lines(x = legendRange[c(i,(i+1))],rep(legendy,2),lwd=10,col=rev(magma(100))[i])
+    }
+    text(x=legendRange[1],y=legendy+((max(umapData$Dim2)-min(umapData$Dim2))*0.025),labels = paste(round(quantile(geneData,c(0.10,0.99))[1],2)))
+    text(x=legendRange[101],y=legendy+((max(umapData$Dim2)-min(umapData$Dim2))*0.025),labels = paste(round(quantile(geneData,c(0.10,0.99))[2],2)))
+    text(x=legendRange[50],y=legendy+((max(umapData$Dim2)-min(umapData$Dim2))*0.025),labels = "Counts per million")
+  }
 }
 
 predictClass <- function(input,classData){
@@ -140,7 +159,7 @@ predictClass <- function(input,classData){
     #neighbours[[j]] <- nb
   }
   res <- Reduce('+',lapply(k,function(x) x$prob))
-  neighbourFreqs <- table(unlist(neighbours))/classData$trainFreqs[names(table(unlist(neighbours)))]
+  #neighbourFreqs <- table(unlist(neighbours))/classData$trainFreqs[names(table(unlist(neighbours)))]
   neighbourScores <- apply(neighbourMat,2,sum,na.rm=T)
   neighbourScores <- neighbourScores/max(neighbourScores)
   return(list("results"=res,"neighbours"=neighbourScores))
