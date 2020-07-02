@@ -1,11 +1,7 @@
 ## to do: ##
-## log scale number of novel variants ##
-## warn if no reports present prior to merge reports ##
 ## tryCatch around combine pdf, warn if file is opened ##
-## download missing expression data in classifier ##
-## highlight sampl is present otherwise project transformed coordinates ##
 
-packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace","umap","kknn")
+packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace","umap","kknn","viridis")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
   install.packages(setdiff(packages, rownames(installed.packages())))  
 }
@@ -30,6 +26,7 @@ library(vcfR)
 library(R.utils)
 library(colorspace)
 library(kknn)
+library(viridis)
 
 baseDirWES <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WES/"
 baseDirWTS <-  "G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/WTS (RNA-Seq)/"
@@ -598,6 +595,9 @@ mergeReports <- function(folder=folder, type=type){
       stop("Specified folder does not exists in WTS (RNA-Seq) folder")
     }
     WTSreports <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "WTSreport.pdf",full.names = T)
+    if (identical(WTSreports,character(0))){
+      return(paste("No reports present in",folder))
+    }
     WTSreportsIther <- WTSreports[grep("iTHER|ITHER",WTSreports)]
     WTSreports <- WTSreports[grep("iTHER|ITHER",WTSreports,invert = T)]
     qcdataRun <- as.data.frame(read.xlsx(paste(baseDirWTS,folder,"metaData_LKR.xlsx",sep="/")))
@@ -827,6 +827,7 @@ mergeReports <- function(folder=folder, type=type){
     reportFiles <- c(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
     pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWES,folder,"/",folder,"_runReport_WES.pdf"))
   }
+  return("Succesfully generated reports")
 }
 
 
@@ -849,14 +850,19 @@ generateReport <- function(folder=folder, type=type){
     mostRecentQC <- mostRecentQC[length(mostRecentQC)]
     qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
     rnaSeqOverview <- loadRNAseqOverview(folder=folder,samples=samples)
+    
     for ( sample in samples ){
-      printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview)
+      out <- tryCatch(printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview),error=function(e) return(paste(sample," file not writeable, close file and regenerate reports")))
       if(grepl("iTHER",qcdataRun[qcdataRun$Biomaterial.ID == sample,"Vraagstelling"])){
-        printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview,ITHER=T)
+        out <- tryCatch(printWTSreport(folder=folder,sample=sample,baseDirWTS = baseDirWTS,qcdataRun = qcdataRun, qcdataAll = qcdataAll, rnaSeqOverview = rnaSeqOverview,ITHER=T),error=function(e) return(paste(sample," file not writeable, close file and regenerate reports")))
+      }
+      if(out == paste(sample," file not writeable")){
+        return(out)
       }
       message(paste("made",sample,"WTS report"))
     }
-    makeWTSoverviewSlide(folder)
+    out <- tryCatch(makeWTSoverviewSlide(folder),error=function(e) return(paste("Overviewslide file not writeable, close file and regenerate reports")))
+    return(out)
   }
   if (type == "WES" | type == "both"){
     if (!dir.exists(paste(baseDirWES,folder,sep="/"))){
@@ -873,13 +879,13 @@ generateReport <- function(folder=folder, type=type){
     qcdataAll <- read.csv(mostRecentQC,stringsAsFactors = F,sep="\t",check.names = F)
     wesOverview <- loadWESOverview(folder=folder,samples=samples)
     for ( sample in samples ){
-      printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview)
+      out <- tryCatch(printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview),error=function(e) return(paste(sample," file not writeable, close file and regenerate reports")))
       if(grepl("iTHER",qcdataRun[qcdataRun$PMABM.tumor == sample,"Vraagstelling"])){
-        printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview,ITHER=T)
+        out <- tryCatch(printWESreport(folder=folder,sample=sample,baseDirWES = baseDirWES,qcdataRun = qcdataRun, qcdataAll = qcdataAll, wesOverview = wesOverview,ITHER=T),error=function(e) return(paste(sample," file not writeable, close file and regenerate reports")))
       }  
       message(paste("made",sample,"WES report"))
     }
-    makeWESoverviewSlide(folder)
+    out <- tryCatch(makeWESoverviewSlide(folder),error=function(e) return(paste("Overviewslide file not writeable, close file and regenerate reports")))
   }
 }
 
@@ -1083,6 +1089,7 @@ printWTSreport <- function(folder,sample,baseDirWTS,qcdataRun,qcdataAll,rnaSeqOv
   grid.draw(grob)
   popViewport(3)
   dev.off()
+  return("Succesfully generated reports")
 }
 
 printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverview,ITHER=F){
@@ -1183,6 +1190,7 @@ printWESreport <- function(folder,sample,baseDirWES,qcdataRun,qcdataAll,wesOverv
   grid.draw(grob)
   popViewport(3)
   dev.off()
+  return("Succesfully generated reports")
 }
 
 
@@ -1428,7 +1436,7 @@ qcBoxplotWES <- function(dataRun,dataAll,samples,variable){
   #dataRun <- dataRun[!is.na(dataRun[,variable]),]
   #samples <- samples[samples %in% rownames(dataRun)]
   if (variable == "novelVariants"){
-    points(jitter(rep(1,nrow(dataRun)),5),dataRun[samples,"novelVariants"],pch=20,col='red',cex=2)
+    points(jitter(rep(1,nrow(dataRun)),5),log10(as.numeric(dataRun[samples,"novelVariants"])),pch=20,col='red',cex=2)
   }else if(variable == "UniqueReads"){
     points(jitter(rep(1,nrow(dataRun)),5),dataRun[samples,"UniqueReadsTumor(10^6)"],pch=20,col='red',cex=2)
     points(jitter(rep(2,nrow(dataRun)),5),dataRun[samples,"UniqueReadsNormal(10^6)"],pch=20,col='orange',cex=2)
@@ -1477,7 +1485,7 @@ makeWTSoverviewSlide <- function(folder){
   qcBoxplotWTS(dataRun = qcdataRun,dataAll = qcdataAll,samples = rownames(qcdataRun),variable = "yield(fmol)")
   qcBoxplotWTS(dataRun = qcdataRun,dataAll = qcdataAll,samples = rownames(qcdataRun),variable = "uniqueReads(10^6)")
   dev.off()
-  
+  return("Succesfully generated reports")
 }
 
 
@@ -1512,7 +1520,7 @@ makeWESoverviewSlide <- function(folder){
   qcBoxplotWES(dataRun = qcdataRun,dataAll = qcdataAll,samples = rownames(qcdataRun),variable = "Contamination")
   qcBoxplotWES(dataRun = qcdataRun,dataAll = qcdataAll,samples = rownames(qcdataRun),variable = "novelVariants")
   dev.off()
-  
+  return("Succesfully generated reports")
 }
 
 loadSeqFolders <- function(){
