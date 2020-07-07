@@ -827,7 +827,7 @@ mergeReports <- function(folder=folder, type=type){
     reportFiles <- c(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
     pdftools::pdf_combine(input=reportFiles,output=paste0(baseDirWES,folder,"/",folder,"_runReport_WES.pdf"))
   }
-  return("Succesfully generated reports")
+  return("Succesfully merged reports")
 }
 
 
