@@ -161,13 +161,16 @@ ui <- navbarPage("PMC NGS R tools",
                             tags$script('$(document).ready(function(){
                                         // id of the plot
                                         $("#compareExpression").mousemove(function(e){ // ID of uiOutput
-                                        $("#my_tooltip3").show();
-                                        $("#my_tooltip3").css({
-                                        top: (e.pageY - 600) + "px",
-                                        left: (e.pageX - 0) + "px"
+                                          $("#my_tooltip3").show();
+                                          $("#my_tooltip3").css({
+                                          top: (e.pageY - 600) + "px",
+                                          left: (e.pageX - 50) + "px"
+                                          })
+
                                         });
-                                        });
-                                        });
+
+                                       });
+                                      
                                         '),
                             
                             br(),
@@ -274,11 +277,15 @@ server <- function(input, output, session) {
   observeEvent(input$mergeReport,ignoreInit = T,{
      type <- input$typeMergeReport
      showModal(modalDialog("Merging reports", footer=NULL))
-     out <- mergeReports(folder = input$seqrunMergeReport,type = type)
+     out <- tryCatch(mergeReports(folder = input$seqrunMergeReport,type = type),error=function(e) return(paste("Could not combine reports, destination file open?")))
      removeModal()
-     output$messages <- renderTable({
-       return(out)
-     })
+     
+     if(out != "Succesfully merged reports"){
+       showNotification(paste(out),duration = 10,closeButton = T,type = "error")
+     }else{
+       showNotification(paste(out),duration = 5,closeButton = T,type = "default")
+       
+     }
   })
   
   observe({
