@@ -1,8 +1,14 @@
 
 library(shiny)
 
-source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/NGS_functions.R")
-source("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/expressionClass.R")
+scriptDir <- "G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/"
+
+source(paste0(scriptDir,"NGS_functions_general.R"))
+source(paste0(scriptDir,"NGS_functions_metadata.R"))
+source(paste0(scriptDir,"NGS_functions_reports.R"))
+source(paste0(scriptDir,"NGS_functions_expression.R"))
+source(paste0(scriptDir,"NGS_functions_mutSignatures.R"))
+source(paste0(scriptDir,"NGS_functions_RNAclassifier.R"))
 
 inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
@@ -297,6 +303,7 @@ server <- function(input, output, session) {
   observe({
     seqRun <- input$seqRunSignature
     sigChoices <- list.files(paste0(baseDirWES,seqRun,"/rawData/"),pattern="vcf.gz")
+    sigChoices <- sigChoices[sapply(sigChoices,function(x) length(strsplit(x,"_")[[1]])) == 4]
     if (length(sigChoices) == 0){
       sigChoices <- "Click get vcfs to download vcf files"
     }
