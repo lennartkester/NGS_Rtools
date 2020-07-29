@@ -1,5 +1,5 @@
 ## to do: ##
-## take info from NGS diagnostiek file ## 
+## in case of misspelled gene in expression check give error message in stead of crash ## 
 
 packages <- c("zoo","readtext","openxlsx","httr","grid","gridExtra","gridBase","pdftools","BiocManager","vcfR","R.utils","colorspace","umap","kknn","viridis")
 if (length(setdiff(packages, rownames(installed.packages()))) > 0){
@@ -113,7 +113,7 @@ loadRNAseqOverview <- function(folder=NULL,samples=NULL,type="biomaterial"){
 
 
 loadWESOverview <- function(folder=NULL,samples=NULL,type="biomaterial"){
-  wesOverview <- as.data.frame(read.xlsx(paste(baseDirWES,"Overview WES Runs.xlsx",sep="/")))
+  wesOverview <- as.data.frame(readxl::read_xlsx(paste(baseDirWES,"Overview WES Runs.xlsx",sep="/")))
   colnames(wesOverview) <- wesOverview[2,]
   wesOverview <- wesOverview[c(5:nrow(wesOverview)),]
   wesOverview <- wesOverview[apply(wesOverview,1,function(x) sum(is.na(x))) != (ncol(wesOverview)),]
