@@ -254,7 +254,7 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   idInBoth <- intersect(mergedData$`Biomaterial ID`,dd$`Biomaterial ID`)
   dd <- dd[dd$`Biomaterial ID` %in% idInBoth,]
   #mergedData <- mergedData[idInBoth,]
-  rownames(dd)<- dd$`Biomaterial ID`
+  rownames(dd)<- make.unique(as.character(dd$`Biomaterial ID`))
   dd <- dd[rownames(mergedData),]
   
   mergedData <- cbind(mergedData,dd)
@@ -292,35 +292,35 @@ makeWTSPlotsAndDataFrame <- function(fusionProbabilityPlots=F){
   colnames(mergedData2)[ncol(mergedData2)] <- "uniqueReads(10^6)"
   
   
-  BSlijst <- read.xlsx(fileList$bslijst)
-  BSlijst <- BSlijst[,c("PMABS","HIX","PMCID","Type","Tumor.%","Necrose%")]
-  BSlijst <- BSlijst[!is.na(BSlijst$PMABS),]
-  BSlijst <- BSlijst[BSlijst$PMABS %in% mergedData2$PMABS,]
-  rownames(BSlijst) <- BSlijst$PMABS
-  BSlijst$tumorPercFinal <- NA
-  BSlijst$tumorPercFinal[grep("%",BSlijst$`Tumor.%`)] <- BSlijst$`Tumor.%`[grep("%",BSlijst$`Tumor.%`)]
-  BSlijst$tumorPercFinal <- gsub("%","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub("<","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub(">","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub(" ","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub("\\?","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub(",","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub("~","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub("[a-zA-Z]","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- sapply(BSlijst$tumorPercFinal, function(x) strsplit(x,"-")[[1]][1])
-  BSlijst$tumorPercFinal <- gsub("\\(40\\)","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- as.numeric(BSlijst$tumorPercFinal)/100
-  BSlijst$tumorPercFinal[grep("%",BSlijst$`Tumor.%`,invert = T)] <- BSlijst$`Tumor.%`[grep("%",BSlijst$`Tumor.%`,invert = T)]
-  BSlijst$tumorPercFinal <- gsub("<","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- gsub("[a-zA-Z]","",BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal <- as.numeric(BSlijst$tumorPercFinal)
-  BSlijst$tumorPercFinal[is.na(BSlijst$tumorPercFinal)] <- -1
-  BSlijst$tumorPercFinal[BSlijst$tumorPercFinal > 1] <- BSlijst$tumorPercFinal[BSlijst$tumorPercFinal > 1]/100
-  BSlijst$tumorPercFinal[BSlijst$tumorPercFinal == -1] <- NA
-  
-  mergedData2 <- merge(mergedData2,BSlijst,by="PMABS",all.x=T)
-  mergedData2$RIN <- as.numeric(as.character(mergedData2$RIN))
-  mergedData2$RIN[mergedData2$RIN == 88] <- 8.8
+  # BSlijst <- read.xlsx(fileList$bslijst)
+  # BSlijst <- BSlijst[,c("PMABS","HIX","PMCID","Type","Tumor.%","Necrose%")]
+  # BSlijst <- BSlijst[!is.na(BSlijst$PMABS),]
+  # BSlijst <- BSlijst[BSlijst$PMABS %in% mergedData2$PMABS,]
+  # rownames(BSlijst) <- BSlijst$PMABS
+  # BSlijst$tumorPercFinal <- NA
+  # BSlijst$tumorPercFinal[grep("%",BSlijst$`Tumor.%`)] <- BSlijst$`Tumor.%`[grep("%",BSlijst$`Tumor.%`)]
+  # BSlijst$tumorPercFinal <- gsub("%","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub("<","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub(">","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub(" ","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub("\\?","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub(",","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub("~","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub("[a-zA-Z]","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- sapply(BSlijst$tumorPercFinal, function(x) strsplit(x,"-")[[1]][1])
+  # BSlijst$tumorPercFinal <- gsub("\\(40\\)","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- as.numeric(BSlijst$tumorPercFinal)/100
+  # BSlijst$tumorPercFinal[grep("%",BSlijst$`Tumor.%`,invert = T)] <- BSlijst$`Tumor.%`[grep("%",BSlijst$`Tumor.%`,invert = T)]
+  # BSlijst$tumorPercFinal <- gsub("<","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- gsub("[a-zA-Z]","",BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal <- as.numeric(BSlijst$tumorPercFinal)
+  # BSlijst$tumorPercFinal[is.na(BSlijst$tumorPercFinal)] <- -1
+  # BSlijst$tumorPercFinal[BSlijst$tumorPercFinal > 1] <- BSlijst$tumorPercFinal[BSlijst$tumorPercFinal > 1]/100
+  # BSlijst$tumorPercFinal[BSlijst$tumorPercFinal == -1] <- NA
+  # 
+  # mergedData2 <- merge(mergedData2,BSlijst,by="PMABS",all.x=T)
+  # mergedData2$RIN <- as.numeric(as.character(mergedData2$RIN))
+  # mergedData2$RIN[mergedData2$RIN == 88] <- 8.8
   
   
   
