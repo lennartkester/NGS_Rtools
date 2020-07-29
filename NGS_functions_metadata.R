@@ -212,6 +212,7 @@ makeMetaDataWES <- function(seqRunDir=NULL,rootDir=baseDirWES){
     metaData$Vraagstelling[grep("PMOBM",metaData[,"PMABM tumor"])] <- "Organoid"
     metaData$MeanCoverageTumor <- round(as.numeric(metaData$MeanCoverageTumor),0)
     metaData$MeanCoverageNormal <- round(as.numeric(metaData$MeanCoverageNormal),0)
+    metaData <- metaData[order(metaData$`PMABM tumor`),]
     write.xlsx(metaData,paste0(rootDir,seqRunDir,"/metaData_LKR.xlsx"))
     
     vcfFiles2 <- getFileList(seqRunDir,rootDir,pattern = "WXS.vcf.gz")$targetFiles
@@ -421,6 +422,7 @@ makeFusionExcelFiles <- function(seqRunDir,rootDir = baseDirWTS){
     }
     samples$RIN <- as.numeric(gsub("[^0-9\\.]", "", as.character(samples$RIN)))
     #samples$TumorPercentage <- as.numeric(gsub("[^0-9\\.]", "", as.character(samples$TumorPercentage)))
+    samples <- samples[order(samples$`Biomaterial ID`),]
     
     tryCatch(write.xlsx(samples,paste0(baseDirWTS,seqRunDir,"/metaData_LKR.xlsx"),colNames = T,overwrite=T),error = function(e) print("metadata file already exists") ) 
     #return(paste("Created excelsheets and metadata for",nrow(samples),"samples"))
