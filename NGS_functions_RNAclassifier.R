@@ -12,7 +12,7 @@ generateUmapData <- function(refCohort,nFeatures=5000,nComp=100){
     data <- apply(refCohort$counts,2,function(x) (x/sum(x))*1000000)
     dataLog <- log(data+1)
     
-    ## select variable features? ##
+    ## select variable features ##
     varGenes <- apply(dataLog,1,var)
     meanGenes <- apply(dataLog,1,mean)
     
@@ -28,23 +28,29 @@ generateUmapData <- function(refCohort,nFeatures=5000,nComp=100){
 
     dataUmap <- umap(pr$x[,c(1:nComp)],alpha=1,gamma=1)
     umapData <- cbind(rownames(dataUmap$layout),dataUmap$layout,refCohort$metaData)
-    colnames(umapData) <- c("PMABM","Dim1","Dim2","Tumortype","Fusion","HIX")
+    colnames(umapData)[c(1:6)] <- c("PMABM","Dim1","Dim2","Tumortype","Fusion","HIX")
     umapAll <- list("umapData"=umapData,"princomp"=pr,"meanGenes"=meanGenes,"varGenes"=varGenes,"varFeatures"=varFeatures,"umapFull"=dataUmap)
     
     umapData$Tumortype <- as.factor(umapData$Tumortype)
+    umapData$Disease_sub_specification1 <- as.factor(umapData$Disease_sub_specification1)
     
     kMat <- as.data.frame(matrix(ncol=2,nrow=100))
     samplesTrainAll <- list()
+    k <- list()
     for ( j in c(1:100)){
+    #  set.seed(j)
+    #  samplesTrain <- unique(sample(rownames(prData),replace = T))
+      samplesTrain <- rownames(prData)
       set.seed(j)
-      samplesTrain <- unique(sample(rownames(prData),replace = T))
+      compsTrain <- unique(sample(c(1:nComp),replace = T))
       samplesTrainAll[[j]] <- samplesTrain
-      prdataTrain <- as.data.frame(prData[samplesTrain,c(1:100)])
-      prdataTrain$class <- umapData[samplesTrain,"Tumortype"]
+      prdataTrain <- as.data.frame(prData[samplesTrain,compsTrain])
+      prdataTrain$class <- umapData[samplesTrain,"Disease_sub_specification1"]
       #prdataTest <- as.data.frame(pr$x[samplesTest,c(1:100)])
-      names(prCurSample) <- colnames(prdataTrain)[c(1:100)]
+      #names(prCurSample) <- colnames(prdataTrain)[compsTrain]
       #k[[j]] <- kknn(class~., prdata,as.data.frame(prCurSample),distance = 2,kernel = "optimal",scale=F,k=10)
       kTrain <- train.kknn(class~., prdataTrain,distance = 2,kernel = "optimal",scale=F,kmax = 20)
+      k[[j]] <- kTrain
       kMat[j,1] <- kTrain$best.parameters$k
       kMat[j,2] <- kTrain$best.parameters$kernel
       
@@ -70,10 +76,28 @@ newSamplePrinComp <- function(classData,newSample){
 
 plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapSample=NULL,scalePoints=1,neighbours=NULL,geneExpressionClass=NULL){
   cols <- rainbow(6)
-  plot(umapData$Dim1,umapData$Dim2,pch=20,xlab="Dim1",ylab="Dim2",cex=2.5*scalePoints,col='lightgrey')
+  ymin <- min(umapData$Dim2)-((max(umapData$Dim2)-min(umapData$Dim2))*0.05)
+  ymax <- max(umapData$Dim2)+((max(umapData$Dim2)-min(umapData$Dim2))*0.05)
+  xmin <- min(umapData$Dim1)-((max(umapData$Dim1)-min(umapData$Dim1))*0.05)
+  xmax <- max(umapData$Dim1)+((max(umapData$Dim1)-min(umapData$Dim1))*0.05)
+  plot(umapData$Dim1,umapData$Dim2,pch=20,xlab="Dim1",ylab="Dim2",ylim=c(ymin,ymax),xlim=c(xmin,xmax),cex=2.5*scalePoints,col='lightgrey')
   points(umapData$Dim1,umapData$Dim2,pch=20,cex=2*scalePoints,col='darkgrey')
-  for ( i in 1:length(tumorTypes)){
-    points(umapData[umapData$Tumortype == tumorTypes[i],"Dim1"],umapData[umapData$Tumortype == tumorTypes[i],"Dim2"],col=cols[i],pch=20,cex=2*scalePoints)
+  legendMatrix <- matrix(ncol=2,nrow=6,data=NA)
+  if(!is.null(tumorTypes)){
+    for ( i in 1:nrow(tumorTypes)){
+      if(is.na(tumorTypes[i,1])){
+        next
+      }
+      if(tumorTypes[i,2] == "All subtypes"){
+        points(umapData[umapData$Disease_sub_class == tumorTypes[i,1],"Dim1"],umapData[umapData$Disease_sub_class == tumorTypes[i,1],"Dim2"],col=cols[i],pch=20,cex=2*scalePoints)
+        legendMatrix[i,1] <- tumorTypes[i,1]
+        legendMatrix[i,2] <- cols[i]
+      }else{
+        points(umapData[umapData$Disease_sub_specification1 == tumorTypes[i,2],"Dim1"],umapData[umapData$Disease_sub_specification1 == tumorTypes[i,2],"Dim2"],col=cols[i],pch=20,cex=2*scalePoints)
+        legendMatrix[i,1] <- tumorTypes[i,2]
+        legendMatrix[i,2] <- cols[i]
+      }
+    }  
   }
   if(!is.null(umapSample)){
     if(umapSample %in% umapData$PMABM){
@@ -84,10 +108,10 @@ plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapS
       newCoord <- newSampleCoordinates(classData = classData,newSample = newData[,umapSample])
       points(newCoord,pch=20,cex=3*scalePoints,col='black')
     }
-    legend("bottomright",legend=c(umapSample,tumorTypes),col=c("black",cols),pch=20,bty='n')
+    legend("bottomright",legend=c(umapSample,legendMatrix[,1]),col=c("black",legendMatrix[,2]),pch=20,bty='n')
   }else{
     if(!is.null(tumorTypes)){
-      legend("bottomright",legend=tumorTypes,col=cols,pch=20,bty='n')
+      legend("bottomright",legend=legendMatrix[,1],col=legendMatrix[,2],pch=20,bty='n')
     }
   }
   if(!is.null(neighbours)){
@@ -98,7 +122,7 @@ plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapS
     neighbourPoints$col <- cols[round(neighbourPoints$neighbour*100,0)+1]
     points(neighbourPoints$Dim1,neighbourPoints$Dim2,col=neighbourPoints$col,pch=20,cex=2)
     legendRange <- seq((min(umapData$Dim1)+max(umapData$Dim1))-((max(umapData$Dim1)-min(umapData$Dim1))*0.1),(min(umapData$Dim1)+max(umapData$Dim1))+((max(umapData$Dim1)-min(umapData$Dim1))*0.1),length.out = 101)
-    legendy <- min(umapData$Dim2)
+    legendy <- ymin
     for(i in 1:100){
       lines(x = legendRange[c(i,(i+1))],rep(legendy,2),lwd=10,col=rev(terrain.colors(100))[i])
     }
@@ -117,7 +141,7 @@ plotExpressionClass <- function(umapData,classData,tumorTypes,umapDir=NULL,umapS
     names(cols) <- colnames(refCohort$counts)
     points(umapData$Dim1,umapData$Dim2,pch=20,cex=2*scalePoints,col=cols[umapData$PMABM])
     legendRange <- seq((min(umapData$Dim1)+max(umapData$Dim1))-((max(umapData$Dim1)-min(umapData$Dim1))*0.1),(min(umapData$Dim1)+max(umapData$Dim1))+((max(umapData$Dim1)-min(umapData$Dim1))*0.1),length.out = 101)
-    legendy <- min(umapData$Dim2)
+    legendy <- ymin
     for(i in 1:100){
       lines(x = legendRange[c(i,(i+1))],rep(legendy,2),lwd=10,col=rev(magma(100))[i])
     }
@@ -141,17 +165,22 @@ predictClass <- function(input,classData){
   neighbourMat <- matrix(ncol=nrow(prData),nrow=100)
   colnames(neighbourMat) <- rownames(prData)
   for ( j in c(1:100)){
+    #set.seed(j)
+    #samplesTrain <- unique(sample(rownames(prData),replace = T))
+    samplesTrain <- rownames(prData)
     set.seed(j)
-    samplesTrain <- unique(sample(rownames(prData),replace = T))
+    compsTrain <- unique(sample(c(1:100),replace = T))
+    
     #samplesTrainAll[[j]] <- samplesTrain
-    prdataTrain <- as.data.frame(prData[samplesTrain,c(1:100)])
-    prdataTrain$class <- classData$umapData[samplesTrain,"Tumortype"]
+    prdataTrain <- as.data.frame(prData[samplesTrain,compsTrain])
+    prdataTrain$class <- as.factor(classData$umapData[samplesTrain,"Disease_sub_specification1"])
     #prdataTest <- as.data.frame(pr$x[samplesTest,c(1:100)])
-    names(prCurSample) <- colnames(prdataTrain)[c(1:100)]
+    colnames(prCurSample) <- colnames(prData)
+    prCurSample2 <- prCurSample[,compsTrain]
     #k[[j]] <- kknn(class~., prdata,as.data.frame(prCurSample),distance = 2,kernel = "optimal",scale=F,k=10)
     #kTrain <- train.kknn(class~., prdataTrain,distance = 2,kernel = "optimal",scale=F,kmax = 20)
     #print(paste(kTrain$best.parameters$k,kTrain$best.parameters$kernel))
-    k[[j]] <- kknn(class~., prdataTrain,as.data.frame(prCurSample),distance = 2,kernel = as.character(classData$kMat$V2[j]),scale=F,k=classData$kMat$V1[j])
+    k[[j]] <- kknn(class~., prdataTrain,(as.data.frame(t(prCurSample2))),distance = 2,kernel = as.character(classData$kMat$V2[j]),scale=F,k=classData$kMat$V1[j])
     rownames(k[[j]]$prob) <- input$umapSample
     nb <- as.vector(k[[j]]$W)
     names(nb) <- rownames(prdataTrain)[k[[j]]$C]
@@ -159,10 +188,21 @@ predictClass <- function(input,classData){
     #neighbours[[j]] <- nb
   }
   res <- Reduce('+',lapply(k,function(x) x$prob))
+  
+  classMatrix <- classData$umapData[,c(7:10)]
+  classMatrix <- classMatrix[!duplicated(apply(classMatrix,1,function(x) paste(x,collapse="_"))),]
+  
+  res2 <- matrix(nrow=1,ncol=length(unique(classData$umapData$Disease_sub_class)),data=0)
+  colnames(res2) <- unique(classData$umapData$Disease_sub_class)
+  for ( j in 1:ncol(res)){
+    subClass <- classMatrix[colnames(res)[j] == classMatrix$Disease_sub_specification1,3]
+    res2[,subClass] <- res2[,subClass] + res[,j]   
+  }
+
   #neighbourFreqs <- table(unlist(neighbours))/classData$trainFreqs[names(table(unlist(neighbours)))]
   neighbourScores <- apply(neighbourMat,2,sum,na.rm=T)
   neighbourScores <- neighbourScores/max(neighbourScores)
-  return(list("results"=res,"neighbours"=neighbourScores))
+  return(list("results"=res,"results2"=res2,"neighbours"=neighbourScores))
 }
 
 
