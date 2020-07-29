@@ -1,4 +1,4 @@
-mergeReports <- function(folder=folder, type=type){
+mergeReports <- function(folder=folder, type="both"){
   reportDir <- "G://Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGSuitslagen/"
   if ( type == "WTS" | type == "both"){
     if (!dir.exists(paste(baseDirWTS,folder,sep="/"))){
@@ -136,6 +136,7 @@ mergeReports <- function(folder=folder, type=type){
     wtsOverview <- loadRNAseqOverview(samples = samplesBiosource,type="biosource",folder=NULL)
     wesOverview <- loadWESOverview(samples = samples,folder = folder)
     wesOverview <- wesOverview[!duplicated(wesOverview$`Biomaterial ID`),]
+    WESonlyReports <- c()
     for ( i in 1:length(samples)){
       curWesReport <- WESreports[i]
       sampleBS <- samplesBiosource[i]
@@ -186,6 +187,10 @@ mergeReports <- function(folder=folder, type=type){
         pdftools::pdf_combine(input = c(WTSreport,curWesReport),output = sub("WESreport.pdf","NGSreport.pdf",curWesReport))
         pdftools::pdf_combine(input = c(WTSreport,curWesReport),output = paste0(sampleHIXdir,"/",sampleHIX,"_",sampleBS,"_",samples[i],".pdf"))
       }
+      if (!is.null(WTSreport) && !grepl(folder,WTSreport)){
+        WESonlyReports <- c(WESonlyReports,sub("WESreport.pdf","NGSreport.pdf",curWesReport))
+      }
+      
       if(grepl("iTHER|ITHER",ither)){
         curWesReport <- sub("WESreport.pdf",paste0(sub(" 02-","_",ither),"_WESreport.pdf"),curWesReport)
         WTSreport <- NULL
@@ -232,6 +237,12 @@ mergeReports <- function(folder=folder, type=type){
         
       }
     }
+    reportFilesWTS <- list.files(path=paste(baseDirWTS,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
+    reportFilesWTS <- c(reportFilesWTS,WESonlyReports)
+    reportFilesWTS <- reportFilesWTS[grep("iTHER|ITHER",reportFilesWTS,invert = T)]
+    reportFilesWTS <- c(paste0(baseDirWTS,folder,"/",folder,"_QCoverview.pdf"),paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFilesWTS)
+    pdftools::pdf_combine(input=reportFilesWTS,output=paste0("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/meeting/",folder,"_runReport.pdf"))
+    
     reportFiles <- list.files(path=paste(baseDirWES,folder,sep=""),pattern = "NGSreport.pdf",full.names = T)
     reportFiles <- reportFiles[grep("iTHER|ITHER",reportFiles,invert = T)]
     reportFiles <- c(paste0(baseDirWES,folder,"/",folder,"_QCoverview.pdf"),reportFiles)
