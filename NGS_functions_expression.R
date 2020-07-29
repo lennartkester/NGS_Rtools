@@ -70,7 +70,7 @@ plotExpression <- function(gene=NULL,sample=NULL,tumorType=NULL,folder=NULL,refD
 
 
 
-loadRefData <- function(countSet = "20200623_PMCdiag_RNAseq_counts_60357.csv"){
+loadRefData <- function(countSet = "20200724_PMCdiag_RNAseq_counts_60357.csv"){
   baseDir <- paste0(baseDirWTS,"QualityControl/expressionData/")
   refFiles <- list.files(baseDir,pattern = "refData.rds")
   
@@ -87,7 +87,7 @@ loadRefData <- function(countSet = "20200623_PMCdiag_RNAseq_counts_60357.csv"){
     samples <- sapply(colnames(countData)[c(3:ncol(countData))],function(x) strsplit(x,"_")[[1]][1])
     #dups <- samples[duplicated(samples)]
     #samplesDedup <- samples[!(samples %in% dups)]
-    samplesDedup <- samples
+    samplesDedup <- samples[!duplicated(samples)]
     
     metaData <- loadRNAseqOverview(samples=samplesDedup,type="biomaterial")
     dupSamples <- rownames(metaData)[grep("\\.1",rownames(metaData))]
@@ -124,9 +124,9 @@ loadRefData <- function(countSet = "20200623_PMCdiag_RNAseq_counts_60357.csv"){
     
     ## remove wrong samples ##
     countDataDedup[,c("PMABM000AGL","PMABM000AGN")] <- countDataDedup[,c("PMABM000AGN","PMABM000AGL")]
-    countDataDedup <- countDataDedup[,!(colnames(countDataDedup) %in% c("PMABM000BJE","PMABM000BJG","PMABM000BJI","PMABM000BJK","PMABM000BJO","PMABM000BJU","PMABM000BKF"))]
-    countDataDedup <- countDataDedup[,rownames(tumorFusion)[tumorFusion$`Tumor type simple` !="No HiX diagnosis"]]
-    
+    countDataDedup <- countDataDedup[,!(colnames(countDataDedup) %in% c("PMABM000BJE","PMABM000BJG","PMABM000BJI","PMABM000BJK","PMABM000BJO","PMABM000BJU","PMABM000BKF","PMLBM000ABT","PMLBM000ABW"))]
+    countDataDedup <- countDataDedup[,colnames(countDataDedup) %in% rownames(tumorFusion)[tumorFusion$`Tumor type simple` !="No HiX diagnosis"]]
+    countDataDedup <- countDataDedup[,grep("PMRBM|PMOBM",colnames(countDataDedup),invert = T)]
     tumorFusion <- tumorFusion[colnames(countDataDedup),]
     saveRDS(list("counts" = countDataDedup,"metaData"=tumorFusion,"version"=countSet),paste0(baseDir,sub(".csv","_refData.rds",countSet)))
     
