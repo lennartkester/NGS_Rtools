@@ -14,8 +14,11 @@ inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
 classData <- generateUmapData(refCohort = refCohort)
 umapData <- classData$umapData
-tumorChoices <- unique(refCohort$metaData$`Tumor type simple`)
+tumorChoices <- unique(refCohort$metaData$Disease_sub_class)
 tumorChoices <- c("NULL",tumorChoices[order(tumorChoices)])
+subTypeChoices <- unique(refCohort$metaData$Disease_sub_specification1)
+subTypeChoices <- c("NULL",subTypeChoices[order(subTypeChoices)])
+
 geneValsAll <- geneValsType <- NULL
 sampleChoices <- "First select seq run"
 
@@ -30,8 +33,8 @@ ui <- navbarPage("PMC NGS R tools",
                           ),
                           fluidRow(
                             column(4,selectInput("typeMetadata", "Choose a type:",choices = c("WTS","WES"))),
-                            column(4,selectInput("typeMakeReport", "Choose a type:",choices = c("WTS","WES"))),
-                            column(4,selectInput("typeMergeReport", "Choose a type:",choices = c("WTS","WES")))
+                            column(4,selectInput("typeMakeReport", "Choose a type:",choices = c("WTS","WES")))
+                            #column(4,selectInput("typeMergeReport", "Choose a type:",choices = c("WTS","WES")))
                           ),
                           fluidRow(
                             column(2,actionButton("getMetadata", tags$b("Make metadata"), icon("paper-plane"), style="color: #fff; background-color: #fd8723; border-color: #ffffff")),
@@ -131,15 +134,23 @@ ui <- navbarPage("PMC NGS R tools",
                             column(4,titlePanel(h4("Highlight tumor types")))
                           ),
                           fluidRow(
-                            column(3,selectInput("tumorType1", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(3,selectInput("tumorType2", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(3,selectInput("tumorType3", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(2,actionButton("resetClassPlot",tags$b("Reset"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
+                            column(2,selectInput("tumorType1", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorSubType1", "Choose a Subtype:",choices = subTypeChoices)),
+                            column(2,selectInput("tumorType2", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorSubType2", "Choose a Subtype:",choices = subTypeChoices)),
+                            column(2,selectInput("tumorType3", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorSubType3", "Choose a Subtype:",choices = subTypeChoices))
                           ),
                           fluidRow(
-                            column(3,selectInput("tumorType4", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(3,selectInput("tumorType5", "Choose a Tumortype:",choices = tumorChoices)),
-                            column(3,selectInput("tumorType6", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorType4", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorSubType4", "Choose a Subtype:",choices = subTypeChoices)),
+                            column(2,selectInput("tumorType5", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorSubType5", "Choose a Subtype:",choices = subTypeChoices)),
+                            column(2,selectInput("tumorType6", "Choose a Tumortype:",choices = tumorChoices)),
+                            column(2,selectInput("tumorSubType6", "Choose a Subtype:",choices = subTypeChoices))
+                          ),
+                          fluidRow(
+                            column(2,actionButton("resetClassPlot",tags$b("Reset"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff")),
                             column(2,actionButton("highlightTypes",tags$b("Highlight tumortypes"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                           ),
                           fluidRow(
@@ -159,7 +170,8 @@ ui <- navbarPage("PMC NGS R tools",
                             column(3,actionButton("printExpClass",tags$b("Print PDF"), style="margin-top: 25px;color: #fff; background-color: #fd8723; border-color: #ffffff"))
                            ),
                           fluidRow(
-                            mainPanel(width = 12,tableOutput("classTable"))
+                            mainPanel(width = 6,tableOutput("classTable2")),
+                            mainPanel(width = 6,tableOutput("classTable"))
                           ),
                           fluidRow(
                             style = "height:600px",
@@ -281,9 +293,8 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$mergeReport,ignoreInit = T,{
-     type <- input$typeMergeReport
      showModal(modalDialog("Merging reports", footer=NULL))
-     out <- tryCatch(mergeReports(folder = input$seqrunMergeReport,type = type),error=function(e) return(paste("Could not combine reports, destination file open?")))
+     out <- tryCatch(mergeReports(folder = input$seqrunMergeReport),error=function(e) return(paste("Could not combine reports, destination file open?")))
      removeModal()
      
      if(out != "Succesfully merged reports"){
@@ -371,7 +382,7 @@ server <- function(input, output, session) {
     req(nrow(y) != 0)
     # y is a data frame and you can freely edit content of the tooltip 
     # with "paste" function
-    y <- y[,c("PMABM","Tumor type simple","Resultaat RNA seq (relevante)")]
+    y <- y[,c("PMABM","Disease_sub_specification1","Resultaat RNA seq (relevante)")]
     colnames(y)[c(2,3)] <- c("Tumortype","Fusie")
     rownames(y) <- NULL
     return((y))
@@ -384,7 +395,7 @@ server <- function(input, output, session) {
     req(nrow(y) != 0)
     # y is a data frame and you can freely edit content of the tooltip 
     # with "paste" function
-    y <- y[,c("PMABM","Tumor type simple","Resultaat RNA seq (relevante)")]
+    y <- y[,c("PMABM","Disease_sub_specification1","Resultaat RNA seq (relevante)")]
     colnames(y)[c(2,3)] <- c("Tumortype","Fusie")
     rownames(y) <- NULL
     return((y))
@@ -433,7 +444,13 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$highlightTypes, ignoreInit = T, {
-    tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
+    tumorTypes <- matrix(ncol=2,nrow=6,data=NA)
+    tumorTypes[1,] <- c(input$tumorType1,input$tumorSubType1)
+    tumorTypes[2,] <- c(input$tumorType2,input$tumorSubType2)
+    tumorTypes[3,] <- c(input$tumorType3,input$tumorSubType3)
+    tumorTypes[4,] <- c(input$tumorType4,input$tumorSubType4)
+    tumorTypes[5,] <- c(input$tumorType5,input$tumorSubType5)
+    tumorTypes[6,] <- c(input$tumorType6,input$tumorSubType6)
     classPlotInput$tumorTypes <- tumorTypes
     classPlotInput$geneExpressionClass <- NULL
   })
@@ -452,9 +469,17 @@ server <- function(input, output, session) {
       res <- classResults$results
       res <- as.matrix(res[,order(res,decreasing = T)[c(1:3)]])
       colnames(res) <- input$umapSample
+      html_caption_str <- as.character(shiny::tags$b(style = "color: #fd8723", "Predicted tumortype sub specification"))
       output$classTable <- renderTable(rownames = T,{
         t(res)/100
-      })
+      }, caption = html_caption_str, caption.placement = "top")
+      res2 <- classResults$results2
+      res2 <- as.matrix(res2[,order(res2,decreasing = T)[c(1:3)]])
+      colnames(res2) <- input$umapSample
+      html_caption_str <- as.character(shiny::tags$b(style = "color: #fd8723", "Predicted tumortype"))
+      output$classTable2 <- renderTable(rownames = T,{
+        t(res2)/100
+      }, caption = html_caption_str, caption.placement = "top")
       classPlotInput$neighbours <- classResults$neighbours
       classPlotInput$classSample <- list(umapDir=input$umapDir,umapSample=input$umapSample)
       classPlotInput$geneExpressionClass <- NULL
@@ -490,7 +515,7 @@ server <- function(input, output, session) {
     req(nrow(y) != 0)
     # y is a data frame and you can freely edit content of the tooltip 
     # with "paste" function
-    y <- y[,c("PMABM","Tumortype","Fusion","HIX")]
+    y <- y[,c("PMABM","Disease_sub_specification1","Fusion","HIX")]
     if (nrow(y) > 5){
       y <- y[c(1:5),]
     }
@@ -510,7 +535,62 @@ server <- function(input, output, session) {
    WTSoverview <- loadRNAseqOverview(folder=seqRun)
    updateSelectInput(session,"umapSample",choices=WTSoverview$`Biomaterial ID` )
  })
-  
+ 
+ observe({
+   tumorType <- input$tumorType1
+   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+   subChoices <- subChoices[order(subChoices)]
+   if (length(subChoices) > 1){
+     subChoices <- c("All subtypes",subChoices)
+   }
+   updateSelectInput(session,"tumorSubType1",choices=subChoices )
+ })
+ observe({
+   tumorType <- input$tumorType2
+   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+   subChoices <- subChoices[order(subChoices)]
+   if (length(subChoices) > 1){
+     subChoices <- c("All subtypes",subChoices)
+   }
+   updateSelectInput(session,"tumorSubType2",choices=subChoices )
+ })
+ observe({
+   tumorType <- input$tumorType3
+   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+   subChoices <- subChoices[order(subChoices)]
+   if (length(subChoices) > 1){
+     subChoices <- c("All subtypes",subChoices)
+   }
+   updateSelectInput(session,"tumorSubType3",choices=subChoices )
+ })
+ observe({
+   tumorType <- input$tumorType4
+   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+   subChoices <- subChoices[order(subChoices)]
+   if (length(subChoices) > 1){
+     subChoices <- c("All subtypes",subChoices)
+   }
+   updateSelectInput(session,"tumorSubType4",choices=subChoices )
+ })
+ observe({
+   tumorType <- input$tumorType5
+   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+   subChoices <- subChoices[order(subChoices)]
+   if (length(subChoices) > 1){
+     subChoices <- c("All subtypes",subChoices)
+   }
+   updateSelectInput(session,"tumorSubType5",choices=subChoices )
+ })
+ observe({
+   tumorType <- input$tumorType6
+   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+   subChoices <- subChoices[order(subChoices)]
+   if (length(subChoices) > 1){
+     subChoices <- c("All subtypes",subChoices)
+   }
+   updateSelectInput(session,"tumorSubType6",choices=subChoices )
+ })
+   
 }
 
 # Create Shiny app ----
