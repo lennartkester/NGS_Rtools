@@ -65,7 +65,9 @@ processVcf <- function(folder,vcfFile,VAF005=F){
 
 
 getMutationalSignature <- function(mut_mat,sample_names,pdf=F,VAF005=F){
-  cancer_signatures = read.table("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/refFiles/sigProfiler_exome_SBS_signatures.csv", sep = ",", header = TRUE)
+  cancer_signatures <- read.table("G:/Diagnostisch Lab/Laboratorium/Moleculair/Patientenuitslagen/NGS_Rtools_dev/refFiles/COSMIC_Mutational_Signatures_v3.1.csv", sep = ";", header = TRUE,stringsAsFactors = F)
+  cancer_signatures[,c(3:ncol(cancer_signatures))] <- apply(cancer_signatures[,c(3:ncol(cancer_signatures))],2,function(x) as.numeric(gsub(",",".",x)))
+  cancer_signatures[is.na(cancer_signatures)] <- 0
   somaticType <- sapply(c(1:nrow(cancer_signatures)), function(x) paste0(substr(cancer_signatures[x,2],1,1),"[",cancer_signatures[x,1],"]",substr(cancer_signatures[x,2],3,3)))
   new_order = match(row.names(mut_mat), somaticType)
   cancer_signatures = cancer_signatures[as.vector(new_order),]
