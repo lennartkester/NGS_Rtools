@@ -12,12 +12,11 @@ source(paste0(scriptDir,"NGS_functions_RNAclassifier.R"))
 
 inputChoices <- loadSeqFolders()
 refCohort <- loadRefData()
-classData <- generateUmapData(refCohort = refCohort)
-umapData <- classData$umapData
+classDataDomains <- generateUmapData(refCohort = refCohort,domain=T)
 tumorChoices <- unique(refCohort$metaData$Disease_sub_class)
-tumorChoices <- c("NULL",tumorChoices[order(tumorChoices)])
+tumorChoices <- c("Select type",tumorChoices[order(tumorChoices)])
 subTypeChoices <- unique(refCohort$metaData$Disease_sub_specification1)
-subTypeChoices <- c("NULL",subTypeChoices[order(subTypeChoices)])
+subTypeChoices <- c("First select type",subTypeChoices[order(subTypeChoices)])
 
 geneValsAll <- geneValsType <- NULL
 sampleChoices <- "First select seq run"
@@ -131,6 +130,9 @@ ui <- navbarPage("PMC NGS R tools",
                  ),
                  tabPanel(tags$b("Compare expression"),
                           fluidRow(
+                            column(2,selectInput("umapDomain", "Choose a Domain:",choices = c("All","Hemato","Neuro","Solid")))
+                          ),
+                          fluidRow(
                             column(4,titlePanel(h4("Highlight tumor types")))
                           ),
                           fluidRow(
@@ -181,7 +183,7 @@ ui <- navbarPage("PMC NGS R tools",
                                         $("#compareExpression").mousemove(function(e){ // ID of uiOutput
                                           $("#my_tooltip3").show();
                                           $("#my_tooltip3").css({
-                                          top: (e.pageY - 600) + "px",
+                                          top: (e.pageY - 750) + "px",
                                           left: (e.pageX - 50) + "px"
                                           })
 
@@ -433,7 +435,11 @@ server <- function(input, output, session) {
     removeModal()
   })
   
-  classPlotInput <- reactiveValues(tumorTypes=NULL,classSample=NULL,geneExpressionClass=NULL,neighbours=NULL)
+  classPlotInput <- reactiveValues(tumorTypes=NULL,classSample=NULL,geneExpressionClass=NULL,neighbours=NULL,domain="All")
+
+  observe({
+    classPlotInput$domain <- input$umapDomain
+  })
   
   observeEvent(input$resetClassPlot,ignoreInit = T,{
     classPlotInput$tumorTypes <- NULL
@@ -465,7 +471,7 @@ server <- function(input, output, session) {
   observeEvent(input$addSampleExpClass, ignoreInit = T, {
     neighbours <- NULL
     if(input$umapSample != "First select seq run"){
-      classResults <- predictClass(input = input,classData = classData)
+      classResults <- predictClass(input = input,classData = classDataDomains[[classPlotInput$domain]])
       res <- classResults$results
       res <- as.matrix(res[,order(res,decreasing = T)[c(1:3)]])
       colnames(res) <- input$umapSample
@@ -488,8 +494,7 @@ server <- function(input, output, session) {
 
   output$compareExpression <- renderPlot(height=900,width=1200,{
     par(mar=c(10,4,3,3))
-    plotExpressionClass(umapData = umapData,
-                        classData = classData,
+    plotExpressionClass(classData = classDataDomains[[classPlotInput$domain]],
                         tumorTypes = classPlotInput$tumorTypes,
                         umapDir=classPlotInput$classSample$umapDir,
                         umapSample=classPlotInput$classSample$umapSample,
@@ -498,10 +503,14 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$printExpClass,ignoreInit=T, {
-    tumorTypes <- c(input$tumorType1,input$tumorType2,input$tumorType3,input$tumorType4,input$tumorType5,input$tumorType6)
     if(input$umapSample != "First select seq run"){
       pdf(paste0(baseDirWTS,input$umapDir,"/",input$umapSample,"_expressionClass.pdf"),width = 12,height = 7)
-      plotExpressionClass(umapData = umapData,classData = classData,tumorTypes = tumorTypes,input=input,scalePoints=0.6)
+      plotExpressionClass(classData = classDataDomains[[classPlotInput$domain]],
+                          tumorTypes = classPlotInput$tumorTypes,
+                          umapDir=classPlotInput$classSample$umapDir,
+                          umapSample=classPlotInput$classSample$umapSample,
+                          neighbours=classPlotInput$neighbours,
+                          geneExpressionClass=classPlotInput$geneExpressionClass)
       dev.off()
     }else{
       showNotification("First select seq run and sample",duration = 5,type="error")
@@ -510,7 +519,7 @@ server <- function(input, output, session) {
   
   output$vals3 <- renderTable({
     hover <- input$plot_hover3 
-    y <- nearPoints(umapData, input$plot_hover3, xvar = "Dim1", yvar = "Dim2",threshold=5)
+    y <- nearPoints(classDataDomains[[classPlotInput$domain]]$umapData, input$plot_hover3, xvar = "Dim1", yvar = "Dim2",threshold=5)
     # y <- nearPoints(data(), input$plot_hover)["wt"]
     req(nrow(y) != 0)
     # y is a data frame and you can freely edit content of the tooltip 
@@ -525,7 +534,7 @@ server <- function(input, output, session) {
   
   output$my_tooltip3 <- renderUI({
     hover <- input$plot_hover3 
-    y <- nearPoints(umapData, input$plot_hover3, xvar = "Dim1", yvar = "Dim2",threshold = 5)
+    y <- nearPoints(classDataDomains[[classPlotInput$domain]]$umapData, input$plot_hover3, xvar = "Dim1", yvar = "Dim2",threshold = 5)
     req(nrow(y) != 0)
     tableOutput("vals3")
   })
@@ -538,55 +547,79 @@ server <- function(input, output, session) {
  
  observe({
    tumorType <- input$tumorType1
-   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
-   subChoices <- subChoices[order(subChoices)]
-   if (length(subChoices) > 1){
-     subChoices <- c("All subtypes",subChoices)
+   if(tumorType == "Select type"){
+     subChoices <- "First select type"
+   }else{
+     subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+     subChoices <- subChoices[order(subChoices)]
+     if (length(subChoices) > 1){
+       subChoices <- c("All subtypes",subChoices)
+     }
    }
    updateSelectInput(session,"tumorSubType1",choices=subChoices )
  })
  observe({
    tumorType <- input$tumorType2
-   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
-   subChoices <- subChoices[order(subChoices)]
-   if (length(subChoices) > 1){
-     subChoices <- c("All subtypes",subChoices)
+   if(tumorType == "Select type"){
+     subChoices <- "First select type"
+   }else{
+     subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+     subChoices <- subChoices[order(subChoices)]
+     if (length(subChoices) > 1){
+       subChoices <- c("All subtypes",subChoices)
+     }
    }
    updateSelectInput(session,"tumorSubType2",choices=subChoices )
  })
  observe({
    tumorType <- input$tumorType3
-   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
-   subChoices <- subChoices[order(subChoices)]
-   if (length(subChoices) > 1){
-     subChoices <- c("All subtypes",subChoices)
+   if(tumorType == "Select type"){
+     subChoices <- "First select type"
+   }else{
+     subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+     subChoices <- subChoices[order(subChoices)]
+     if (length(subChoices) > 1){
+       subChoices <- c("All subtypes",subChoices)
+     }
    }
    updateSelectInput(session,"tumorSubType3",choices=subChoices )
  })
  observe({
    tumorType <- input$tumorType4
-   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
-   subChoices <- subChoices[order(subChoices)]
-   if (length(subChoices) > 1){
-     subChoices <- c("All subtypes",subChoices)
+   if(tumorType == "Select type"){
+     subChoices <- "First select type"
+   }else{
+     subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+     subChoices <- subChoices[order(subChoices)]
+     if (length(subChoices) > 1){
+       subChoices <- c("All subtypes",subChoices)
+     }
    }
    updateSelectInput(session,"tumorSubType4",choices=subChoices )
  })
  observe({
    tumorType <- input$tumorType5
-   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
-   subChoices <- subChoices[order(subChoices)]
-   if (length(subChoices) > 1){
-     subChoices <- c("All subtypes",subChoices)
+   if(tumorType == "Select type"){
+     subChoices <- "First select type"
+   }else{
+     subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+     subChoices <- subChoices[order(subChoices)]
+     if (length(subChoices) > 1){
+       subChoices <- c("All subtypes",subChoices)
+     }
    }
    updateSelectInput(session,"tumorSubType5",choices=subChoices )
  })
  observe({
    tumorType <- input$tumorType6
-   subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
-   subChoices <- subChoices[order(subChoices)]
-   if (length(subChoices) > 1){
-     subChoices <- c("All subtypes",subChoices)
+   if(tumorType == "Select type"){
+     subChoices <- "First select type"
+   }else{
+     subChoices <- unique(refCohort$metaData$Disease_sub_specification1[refCohort$metaData$Disease_sub_class == tumorType])
+     subChoices <- subChoices[order(subChoices)]
+     if (length(subChoices) > 1){
+       subChoices <- c("All subtypes",subChoices)
+     }
    }
    updateSelectInput(session,"tumorSubType6",choices=subChoices )
  })
